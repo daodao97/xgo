@@ -68,32 +68,46 @@ func Warn(msg string, args ...any) {
 
 func DebugCtx(ctx context.Context, msg string, args ...any) {
 	if requestId := ctx.Value("request_id"); requestId != nil {
-		args = append([]any{requestId.(string)}, args...)
+		args = append([]any{String("request_id", requestId.(string))}, args...)
 	}
 	logger.DebugContext(ctx, msg, args...)
 }
 
 func InfoCtx(ctx context.Context, msg string, args ...any) {
 	if requestId := ctx.Value("request_id"); requestId != nil {
-		args = append([]any{requestId.(string)}, args...)
+		args = append([]any{String("request_id", requestId.(string))}, args...)
 	}
 	logger.InfoContext(ctx, msg, args...)
 }
 
 func ErrorCtx(ctx context.Context, msg string, args ...any) {
 	if requestId := ctx.Value("request_id"); requestId != nil {
-		args = append([]any{requestId.(string)}, args...)
+		args = append([]any{String("request_id", requestId.(string))}, args...)
 	}
 	logger.ErrorContext(ctx, msg, args...)
 }
 
 func WarnCtx(ctx context.Context, msg string, args ...any) {
 	if requestId := ctx.Value("request_id"); requestId != nil {
-		args = append([]any{requestId.(string)}, args...)
+		args = append([]any{String("request_id", requestId.(string))}, args...)
 	}
 	logger.WarnContext(ctx, msg, args...)
 }
 
-func Err(err error) slog.Attr {
+func err(err error) slog.Attr {
 	return slog.Any("err", err)
 }
+
+var (
+	String   = slog.String
+	Int      = slog.Int
+	Int64    = slog.Int64
+	Uint64   = slog.Uint64
+	Float64  = slog.Float64
+	Bool     = slog.Bool
+	Time     = slog.Time
+	Duration = slog.Duration
+	Any      = slog.Any
+	Group    = slog.Group
+	Err      = err
+)

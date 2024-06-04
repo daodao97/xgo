@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/daodao97/xgo/xlog"
-	"log/slog"
 	"net/http"
 	"runtime"
 	"time"
@@ -93,7 +92,7 @@ func RequestLogMiddleware(next http.Handler) http.Handler {
 			fn = xlog.InfoCtx
 		}
 
-		fn(r.Context(), "request", slog.String("method", r.Method), slog.String("path", r.URL.Path), slog.Int("statusCode", lr.statusCode), slog.String("duration", duration.String()))
+		fn(r.Context(), "request", xlog.String("method", r.Method), xlog.String("path", r.URL.Path), xlog.Int("statusCode", lr.statusCode), xlog.Duration("duration", duration))
 	})
 }
 
