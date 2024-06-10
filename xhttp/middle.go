@@ -4,10 +4,11 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
-	"github.com/daodao97/xgo/xlog"
 	"net/http"
 	"runtime"
 	"time"
+
+	"github.com/daodao97/xgo/xlog"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
@@ -116,4 +117,19 @@ func (rl *responseLogger) Flush() {
 		panic("原始 ResponseWriter 不支持 http.Flusher 接口")
 	}
 	flusher.Flush()
+}
+
+func Cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")                                                            // 允许访问所有域，可以换成具体url，注意仅具体url才能带cookie信息
+		w.Header().Add("Access-Control-Allow-Headers", "Content-Type,AccessToken,X-CSRF-Token, Authorization, Token") //header的类型
+		w.Header().Add("Access-Control-Allow-Credentials", "true")                                                    //设置为true，允许ajax异步请求带cookie信息
+		w.Header().Add("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")                             //允许请求方法
+		w.Header().Set("content-type", "application/json;charset=UTF-8")                                              //返回数据格式是json
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
