@@ -2,9 +2,9 @@ package xconf
 
 import (
 	"fmt"
+	"github.com/daodao97/xgo/xlog"
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
-	"xgo/xlog"
 )
 
 func Init(configFile string, dest any) error {
