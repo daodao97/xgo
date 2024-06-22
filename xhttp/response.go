@@ -3,6 +3,7 @@ package xhttp
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/schema"
 	"net/http"
 )
 
@@ -46,5 +47,26 @@ func DecodeBody[T any](r *http.Request) (*T, error) {
 	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
 		return nil, err
 	}
+	return &v, nil
+}
+
+// Decoder is a reusable schema decoder for form data, it's safe for concurrent use.
+var decoder = schema.NewDecoder()
+
+func DecodeFormData[T any](r *http.Request) (*T, error) {
+	// Parse form data; this needs to be done before accessing form data
+	if err := r.ParseForm(); err != nil {
+		return nil, err
+	}
+
+	// Initialize the variable to store the decoded data
+	var v T
+
+	// Decode the form values into 'v'
+	if err := decoder.Decode(&v, r.PostForm); err != nil {
+		return nil, err
+	}
+
+	// Return the pointer to 'v'
 	return &v, nil
 }
