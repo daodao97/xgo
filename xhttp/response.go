@@ -1,9 +1,11 @@
 package xhttp
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/schema"
+	"io"
 	"net/http"
 )
 
@@ -40,6 +42,17 @@ func ResponseSSE(w http.ResponseWriter, dataChan <-chan string) {
 		}
 		flusher.Flush()
 	}
+}
+
+func ReadRequestBody(req *http.Request) ([]byte, error) {
+	bodyBytes, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, err
+	}
+	req.Body.Close()
+	req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	return bodyBytes, nil
 }
 
 func DecodeBody[T any](r *http.Request) (*T, error) {
