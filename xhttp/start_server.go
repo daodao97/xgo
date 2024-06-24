@@ -3,47 +3,73 @@ package xhttp
 import (
 	"context"
 	"errors"
-	"github.com/daodao97/xgo/xlog"
+	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
+
+	"github.com/cloudflare/tableflip"
+
+	"github.com/daodao97/xgo/xlog"
 )
 
 func StartServer(handler http.Handler, addr string, shutdownTimeout time.Duration) {
-	// 创建一个自定义的 HTTP 服务器
-	srv := &http.Server{
-		Handler: handler,
-		Addr:    addr,
-		//ReadTimeout:  30 * time.Second,
-		//WriteTimeout: 30 * time.Second,
-		//IdleTimeout:  30 * time.Second,
+	upg, err := tableflip.New(tableflip.Options{
+		PIDFile: "pid",
+	})
+	if err != nil {
+		panic(err)
 	}
+	defer upg.Stop()
 
-	// 启动服务器
+	// Do an upgrade on SIGHUP
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			xlog.Error("listen: " + err.Error())
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGHUP)
+		for range sig {
+			err := upg.Upgrade()
+			if err != nil {
+				log.Println("Upgrade failed:", err)
+			}
 		}
 	}()
 
-	xlog.Info("Server started on " + addr)
-
-	// 创建一个通道，用于接收操作系统信号
-	stopChan := make(chan os.Signal, 1)
-	signal.Notify(stopChan, os.Interrupt)
-
-	// 阻塞，直到收到中断信号
-	<-stopChan
-	xlog.Info("Shutting down xhttp...")
-
-	// 创建一个上下文，设置关闭服务器的超时时间
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
-
-	// 优雅地关闭服务器
-	if err := srv.Shutdown(ctx); err != nil {
-		xlog.Error("Server Shutdown Failed: " + err.Error())
+	// Listen must be called before Ready
+	ln, err := upg.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalln("Can't listen:", err)
 	}
-	xlog.Info("Server gracefully stopped")
+
+	server := http.Server{
+		Handler: handler,
+		// Set timeouts, etc.
+	}
+
+	go func() {
+		err := server.Serve(ln)
+		if !errors.Is(err, http.ErrServerClosed) {
+			log.Println("HTTP server:", err)
+		}
+	}()
+
+	xlog.Info(fmt.Sprintf("serving on %s", ln.Addr()))
+	if err := upg.Ready(); err != nil {
+		panic(err)
+	}
+	<-upg.Exit()
+	xlog.Info("shutting down...")
+
+	// Make sure to set a deadline on exiting the process
+	// after upg.Exit() is closed. No new upgrades can be
+	// performed if the parent doesn't exit.
+	time.AfterFunc(shutdownTimeout, func() {
+		log.Println("Graceful shutdown timed out")
+		os.Exit(1)
+	})
+
+	// Wait for connections to drain.
+	server.Shutdown(context.Background())
 }
