@@ -17,9 +17,7 @@ import (
 )
 
 func StartServer(handler http.Handler, addr string, shutdownTimeout time.Duration) {
-	upg, err := tableflip.New(tableflip.Options{
-		PIDFile: "pid",
-	})
+	upg, err := tableflip.New(tableflip.Options{})
 	if err != nil {
 		panic(err)
 	}
