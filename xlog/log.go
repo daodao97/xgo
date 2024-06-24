@@ -12,7 +12,7 @@ var opts = slog.HandlerOptions{
 	Level: slog.LevelDebug,
 }
 
-var logger = StdoutText()
+var logger = StdoutTextPretty()
 
 func SetLogger(l *slog.Logger) {
 	logger = l

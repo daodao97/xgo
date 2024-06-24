@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/schema"
 	"io"
 	"net/http"
-	"reflect"
 )
 
 func ResponseJson(w http.ResponseWriter, data any) {
@@ -63,35 +63,23 @@ func DecodeBody[T any](r *http.Request) (*T, error) {
 	return &v, nil
 }
 
+// Decoder is a reusable schema decoder for form data, it's safe for concurrent use.
+var decoder = schema.NewDecoder()
+
 func DecodeFormData[T any](r *http.Request) (*T, error) {
+	// Parse form data; this needs to be done before accessing form data
+	if err := r.ParseForm(); err != nil {
+		return nil, err
+	}
+
+	// Initialize the variable to store the decoded data
 	var v T
 
-	// Parse form data from the request
-	if err := r.ParseForm(); err != nil {
-		return nil, fmt.Errorf("error parsing form: %w", err)
+	// Decode the form values into 'v'
+	if err := decoder.Decode(&v, r.PostForm); err != nil {
+		return nil, err
 	}
 
-	// Use reflection to fill in the fields of the struct v
-	val := reflect.ValueOf(&v).Elem()
-	typ := val.Type()
-
-	for i := 0; i < val.NumField(); i++ {
-		field := val.Field(i)
-		if field.CanSet() {
-			// Get the form tag for the field
-			tag := typ.Field(i).Tag.Get("form")
-			if tag == "" {
-				tag = typ.Field(i).Name // Fallback to field name
-			}
-
-			// Check if the value is provided in the form
-			if values, exists := r.Form[tag]; exists && len(values) > 0 {
-				// Assuming all fields are of string type for simplicity
-				// Convert the first value from the form to the field's type
-				field.Set(reflect.ValueOf(values[0]))
-			}
-		}
-	}
-
+	// Return the pointer to 'v'
 	return &v, nil
 }

@@ -2,6 +2,7 @@ package xlog
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -24,7 +25,7 @@ func (h *PrettyHandler) Handle(ctx context.Context, r slog.Record) error {
 
 	switch r.Level {
 	case slog.LevelDebug:
-		level = color.MagentaString(level)
+		level = color.CyanString(level)
 	case slog.LevelInfo:
 		level = color.BlueString(level)
 	case slog.LevelWarn:
@@ -40,7 +41,13 @@ func (h *PrettyHandler) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	r.Attrs(func(a slog.Attr) bool {
-		_log = append(_log, slog.Any(color.New(color.FgCyan).Sprintf(a.Key), a.Value.Any()))
+		var formattedAttr string
+		if strVal, ok := a.Value.Any().(string); ok {
+			formattedAttr = fmt.Sprintf("%s=%q", color.New(color.FgCyan).Sprintf(a.Key), strVal)
+		} else {
+			formattedAttr = fmt.Sprintf("%s=%v", color.New(color.FgCyan).Sprintf(a.Key), a.Value.Any())
+		}
+		_log = append(_log, formattedAttr)
 
 		return true
 	})
