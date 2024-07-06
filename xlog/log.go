@@ -19,6 +19,10 @@ func SetLogger(l *slog.Logger) {
 	slog.SetDefault(l)
 }
 
+func GetLogger() *slog.Logger {
+	return logger
+}
+
 func StdoutText(opts ...Option) *slog.Logger {
 	_opts := NewOptions(opts...)
 	return slog.New(slog.NewTextHandler(os.Stdout, &_opts.HandlerOptions))
