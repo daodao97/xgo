@@ -23,9 +23,13 @@ type RateLimit struct {
 	Prefix string
 }
 
+func (r RateLimit) key(k string) string {
+	return fmt.Sprintf("rate_limit_%s:%s", r.Prefix, k)
+}
+
 // IsAllowed 检查是否允许进行下一次API调用
 func (r RateLimit) IsAllowed(ctx context.Context, key string) bool {
-	redisKey := fmt.Sprintf("rate_limit_%s:%s", r.Prefix, key)
+	redisKey := r.key(key)
 	val, err := client.Get(ctx, redisKey).Int()
 	if err != nil && !errors.Is(err, redis.Nil) {
 		return true
@@ -50,8 +54,17 @@ func (r RateLimit) Incr(ctx context.Context, key string) bool {
 	return true
 }
 
+func (r RateLimit) Get(ctx context.Context, key string) int64 {
+	redisKey := r.key(key)
+	i, err := client.Get(ctx, redisKey).Int64()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return 0
+	}
+	return i
+}
+
 // GetRemainingTime 获取剩余的限制时间
 func (r RateLimit) GetRemainingTime(ctx context.Context, key string) time.Duration {
-	redisKey := fmt.Sprintf("rate_limit_%s:%s:%d", r.Prefix, key, time.Now().UnixNano()/int64(r.Period))
+	redisKey := r.key(key)
 	return client.TTL(ctx, redisKey).Val()
 }
