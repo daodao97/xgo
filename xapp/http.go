@@ -2,6 +2,7 @@ package xapp
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"time"
 
@@ -42,10 +43,24 @@ func (s *HTTPServer) Start() error {
 
 func (s *HTTPServer) Stop() {
 	xlog.Debug("Stopping HTTP server")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := s.server.Shutdown(ctx); err != nil {
 		xlog.Error("HTTP server Shutdown", xlog.Err(err))
+	} else {
+		xlog.Debug("HTTP server Shutdown completed successfully")
 	}
+
+	// 确认端口是否关闭
+	time.Sleep(1 * time.Second) // 等待1秒以确保所有连接已关闭
+	conn, err := net.DialTimeout("tcp", s.server.Addr, 1*time.Second)
+	if err == nil {
+		conn.Close()
+		xlog.Error("HTTP server is still accessible on", xlog.String("port", s.server.Addr))
+	} else {
+		xlog.Debug("HTTP server is not accessible anymore")
+	}
+
+	xlog.Debug("Stop HTTP server done")
 }

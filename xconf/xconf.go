@@ -1,14 +1,14 @@
 package xconf
 
 import (
-	"fmt"
-	"github.com/daodao97/xgo/xlog"
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
+
+	"github.com/daodao97/xgo/xlog"
 )
 
 func Init(configFile string, dest any) error {
-	fmt.Println("config file:", configFile)
+	xlog.Debug("config file", xlog.String("path", configFile))
 	viper.SetConfigType("yaml")
 	viper.SetConfigFile(configFile)
 	err := viper.ReadInConfig()

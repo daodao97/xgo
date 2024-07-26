@@ -87,3 +87,27 @@ func RemoveReqCookie(req *http.Request, cookieName string) {
 func AddReqCookie(req *http.Request, cookieName string, value string) {
 	req.AddCookie(&http.Cookie{Name: cookieName, Value: value})
 }
+
+func OverwriteCookie(r *http.Request, name, value string) {
+	// Create a new cookie with the given name and value
+	newCookie := &http.Cookie{
+		Name:    name,
+		Value:   value,
+		Expires: time.Now().Add(24 * time.Hour), // Set expiration to 24 hours from now
+		Path:    "/",                            // Set the cookie path
+	}
+
+	// Find the existing cookie with the same name
+	for i, cookie := range r.Cookies() {
+		if cookie.Name == name {
+			// Replace the existing cookie with the new one
+			r.AddCookie(newCookie)
+			// Remove the old cookie from the slice
+			r.Header["Cookie"] = append(r.Header["Cookie"][:i], r.Header["Cookie"][i+1:]...)
+			return
+		}
+	}
+
+	// If no existing cookie was found, just add the new one
+	r.AddCookie(newCookie)
+}

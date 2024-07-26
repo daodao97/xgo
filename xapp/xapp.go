@@ -29,7 +29,6 @@ type Server interface {
 type App struct {
 	startups    []Startup
 	servers     []NewServer
-	relServers  []Server
 	beforeStart []BeforeStart
 }
 
@@ -72,12 +71,14 @@ func (a *App) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	var servers []Server
+
 	for _, server := range a.servers {
 		wg.Add(1)
 		go func(s NewServer) {
 			defer wg.Done()
 			_s := s()
-			a.relServers = append(a.relServers, _s)
+			servers = append(servers, _s)
 			if err := _s.Start(); err != nil {
 				errChan <- err
 				cancel()
@@ -94,14 +95,14 @@ func (a *App) Run() error {
 	case err := <-errChan:
 		return fmt.Errorf("server error: %w", err)
 	case sig := <-sigChan:
-		xlog.Debug("Received signal: %v\n", sig)
+		xlog.Debug("received signal", xlog.Any("signal", sig))
 	case <-ctx.Done():
 		xlog.Warn("Context cancelled")
 	}
 
 	// 优雅关闭
-	xlog.Debug("Shutting down servers...")
-	for _, server := range a.relServers {
+	xlog.Debug("Shutting down servers...", xlog.Any("num", len(servers)))
+	for _, server := range servers {
 		server.Stop()
 	}
 
