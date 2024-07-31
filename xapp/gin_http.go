@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/daodao97/xgo/utils"
 	"github.com/daodao97/xgo/xlog"
 )
 
@@ -23,6 +24,9 @@ func NewGin() *gin.Engine {
 	gin.DefaultWriter = logger
 	gin.DefaultErrorWriter = logger
 	r := gin.New()
+	if !utils.IsGoRun() {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	r.Use(gin.Recovery())
 	r.Use(func(c *gin.Context) {
 		// 开始时间

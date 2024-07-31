@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -33,4 +35,8 @@ func IsUrl(str string) bool {
 	}
 
 	return true
+}
+
+func IsGoRun() bool {
+	return filepath.Base(os.Args[0]) == "main"
 }
