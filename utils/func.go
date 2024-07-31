@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -37,6 +36,11 @@ func IsUrl(str string) bool {
 	return true
 }
 
-func IsGoRun() bool {
-	return filepath.Base(os.Args[0]) == "main"
+func IsGoRun() (withGoRun bool) {
+	if strings.HasPrefix(os.Args[0], os.TempDir()) {
+		withGoRun = true
+	} else {
+		withGoRun = false
+	}
+	return
 }
