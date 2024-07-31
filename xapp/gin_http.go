@@ -23,10 +23,10 @@ func NewGin() *gin.Engine {
 	logger := SlogWriter{logger: xlog.GetLogger()}
 	gin.DefaultWriter = logger
 	gin.DefaultErrorWriter = logger
-	r := gin.New()
 	if !utils.IsGoRun() {
 		gin.SetMode(gin.ReleaseMode)
 	}
+	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(func(c *gin.Context) {
 		// 开始时间
