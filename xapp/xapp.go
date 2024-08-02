@@ -27,9 +27,10 @@ type Server interface {
 }
 
 type App struct {
-	startups    []Startup
-	servers     []NewServer
-	beforeStart []BeforeStart
+	startups     []Startup
+	servers      []NewServer
+	beforeStart  []BeforeStart
+	afterStarted func()
 }
 
 func NewApp() *App {
@@ -48,6 +49,11 @@ func (a *App) AddServer(server ...NewServer) *App {
 
 func (a *App) AddBeforeStart(fn ...BeforeStart) *App {
 	a.beforeStart = append(a.beforeStart, fn...)
+	return a
+}
+
+func (a *App) AfterStarted(fn func()) *App {
+	a.afterStarted = fn
 	return a
 }
 
@@ -84,6 +90,10 @@ func (a *App) Run() error {
 				cancel()
 			}
 		}(server)
+	}
+
+	if a.afterStarted != nil {
+		a.afterStarted()
 	}
 
 	// 处理信号
