@@ -10,6 +10,7 @@ import (
 
 	"github.com/daodao97/xgo/xdb"
 	"github.com/daodao97/xgo/xlog"
+	"github.com/daodao97/xgo/xtype"
 )
 
 type Rule struct {
@@ -51,15 +52,16 @@ func InitSchema(schema embed.FS) {
 			if err != nil {
 				return err
 			}
+			_content := xtype.JsonStrVarReplace(string(content), map[string]any{})
 			// 使用文件名（无扩展名）作为规则键
 			key := strings.TrimSuffix(strings.TrimPrefix(path, "schema/"), ".json")
 			exists, ok := Rules[key]
 			if ok {
-				exists.Schema = string(content)
+				exists.Schema = _content
 				Rules[key] = exists
 			} else {
 				Rules[key] = Rule{
-					Schema: string(content),
+					Schema: _content,
 				}
 			}
 		}
