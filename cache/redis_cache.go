@@ -22,16 +22,8 @@ type RedisCache struct {
 	prefix string
 }
 
-func NewRedisWith(options *redis.Options, option ...RedisOption) *RedisCache {
-	c := NewRedisCache(options)
-	for _, o := range option {
-		o(c)
-	}
-	return c
-}
-
 // NewRedisCache 创建一个新的 RedisCache 实例
-func NewRedisCache(options *redis.Options) *RedisCache {
+func NewRedisCache(options *redis.Options, option ...RedisOption) *RedisCache {
 	// 创建一个 Redis 客户端
 	client := redis.NewClient(options)
 
@@ -41,22 +33,31 @@ func NewRedisCache(options *redis.Options) *RedisCache {
 		panic("failed to connect to Redis")
 	}
 
-	return &RedisCache{
+	c := &RedisCache{
 		client: client,
 	}
+
+	for _, o := range option {
+		o(c)
+	}
+	return c
 }
 
 // NewRedis 创建一个新的 RedisCache 实例
-func NewRedis(client *redis.Client) *RedisCache {
+func NewRedis(client *redis.Client, option ...RedisOption) *RedisCache {
 	// 检查是否能连接到 Redis 服务器
 	_, err := client.Ping(context.Background()).Result()
 	if err != nil {
 		panic("failed to connect to Redis")
 	}
 
-	return &RedisCache{
+	c := &RedisCache{
 		client: client,
 	}
+	for _, o := range option {
+		o(c)
+	}
+	return c
 }
 
 func (c *RedisCache) key(key string) string {
