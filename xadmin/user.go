@@ -4,8 +4,11 @@ import (
 	_ "embed"
 	"net/http"
 
+	"github.com/golang-jwt/jwt/v5"
+
 	"github.com/daodao97/xgo/xdb"
 	"github.com/daodao97/xgo/xhttp"
+	"github.com/daodao97/xgo/xjwt"
 	"github.com/daodao97/xgo/xlog"
 
 	"github.com/gorilla/mux"
@@ -19,10 +22,15 @@ func SetRoutes(r string) {
 	routes = r
 }
 
-var _jwt *Token
+type JwtConf struct {
+	Secret      string
+	TokenExpire int64
+}
+
+var _jwtConf *JwtConf
 
 func SetJwt(c *JwtConf) {
-	_jwt = NewToken(c)
+	_jwtConf = c
 }
 
 type User struct {
@@ -72,7 +80,10 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := _jwt.GenerateToken(1, user.Username)
+	token, err := xjwt.GenHMacToken(jwt.MapClaims{
+		"username": row.GetString("username"),
+		"user_id":  row.GetInt("id"),
+	}, _jwtConf.Secret)
 	if err != nil {
 		xhttp.ResponseJson(w, Map{
 			"code": 500,
@@ -100,7 +111,7 @@ func infoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	username, err := _jwt.ParseToken(token)
+	payload, err := xjwt.VerifyHMacToken(token, _jwtConf.Secret)
 	if err != nil {
 		xhttp.ResponseJson(w, Map{
 			"code": 401,
@@ -113,7 +124,7 @@ func infoHandler(w http.ResponseWriter, r *http.Request) {
 		"code": 0,
 		"data": Map{
 			"id":       1,
-			"name":     username.Username,
+			"name":     payload["username"].(string),
 			"resource": nil,
 			"env":      "prod",
 			"website": map[string]string{

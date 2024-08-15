@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/daodao97/xgo/xhttp"
+	"github.com/daodao97/xgo/xjwt"
 )
 
 //go:embed ui
@@ -72,7 +73,7 @@ func auth(handler http.Handler) http.Handler {
 			return
 		}
 
-		_, err := _jwt.ParseToken(r.Header.Get("X-Token"))
+		_, err := xjwt.VerifyHMacToken(r.Header.Get("X-Token"), _jwtConf.Secret)
 		if err != nil {
 			xhttp.ResponseJson(w, map[string]interface{}{
 				"code": 401,

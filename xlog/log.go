@@ -6,7 +6,13 @@ import (
 	"os"
 
 	"gopkg.in/natefinch/lumberjack.v2"
+
+	"github.com/daodao97/xgo/triceid"
 )
+
+func init() {
+	SetLogger(StdoutTextPretty())
+}
 
 var opts = slog.HandlerOptions{
 	Level: slog.LevelDebug,
@@ -70,32 +76,30 @@ func Warn(msg string, args ...any) {
 	logger.Warn(msg, args...)
 }
 
-func DebugCtx(ctx context.Context, msg string, args ...any) {
+func withTriceId(ctx context.Context, args ...any) []any {
 	if requestId := ctx.Value("request_id"); requestId != nil {
-		args = append([]any{String("request_id", requestId.(string))}, args...)
+		args = append(args, String("request_id", requestId.(string)))
 	}
-	logger.DebugContext(ctx, msg, args...)
+	if triceId := triceid.FromTraceId(ctx); triceId != "" {
+		args = append(args, String("trice_id", triceId))
+	}
+	return args
+}
+
+func DebugCtx(ctx context.Context, msg string, args ...any) {
+	logger.DebugContext(ctx, msg, withTriceId(ctx, args...)...)
 }
 
 func InfoCtx(ctx context.Context, msg string, args ...any) {
-	if requestId := ctx.Value("request_id"); requestId != nil {
-		args = append([]any{String("request_id", requestId.(string))}, args...)
-	}
-	logger.InfoContext(ctx, msg, args...)
+	logger.InfoContext(ctx, msg, withTriceId(ctx, args...)...)
 }
 
 func ErrorCtx(ctx context.Context, msg string, args ...any) {
-	if requestId := ctx.Value("request_id"); requestId != nil {
-		args = append([]any{String("request_id", requestId.(string))}, args...)
-	}
-	logger.ErrorContext(ctx, msg, args...)
+	logger.ErrorContext(ctx, msg, withTriceId(ctx, args...)...)
 }
 
 func WarnCtx(ctx context.Context, msg string, args ...any) {
-	if requestId := ctx.Value("request_id"); requestId != nil {
-		args = append([]any{String("request_id", requestId.(string))}, args...)
-	}
-	logger.WarnContext(ctx, msg, args...)
+	logger.WarnContext(ctx, msg, withTriceId(ctx, args...)...)
 }
 
 func err(err error) slog.Attr {
@@ -114,4 +118,9 @@ var (
 	Any      = slog.Any
 	Group    = slog.Group
 	Err      = err
+
+	DebugC = DebugCtx
+	InfoC  = InfoCtx
+	WarnC  = WarnCtx
+	ErrorC = ErrorCtx
 )

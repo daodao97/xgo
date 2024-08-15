@@ -3,20 +3,12 @@ package xjwt
 import (
 	"crypto/rsa"
 	"fmt"
-	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func generateToken(privateKey *rsa.PrivateKey) (string, error) {
-	claims := jwt.MapClaims{
-		"sub":  "1234567890",
-		"name": "John Doe",
-		"iat":  time.Now().Unix(),
-		"exp":  time.Now().Add(time.Hour * 24).Unix(),
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+func GenerateRsaToken(payload jwt.MapClaims, privateKey *rsa.PrivateKey) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, payload)
 	tokenString, err := token.SignedString(privateKey)
 	if err != nil {
 		return "", err
@@ -25,7 +17,7 @@ func generateToken(privateKey *rsa.PrivateKey) (string, error) {
 	return tokenString, nil
 }
 
-func validateToken(tokenString string, publicKey *rsa.PublicKey) (*jwt.Token, error) {
+func VerifyRasToken(tokenString string, publicKey *rsa.PublicKey) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -37,5 +29,9 @@ func validateToken(tokenString string, publicKey *rsa.PublicKey) (*jwt.Token, er
 		return nil, err
 	}
 
-	return token, nil
+	if !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+
+	return token.Claims.(jwt.MapClaims), nil
 }
