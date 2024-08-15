@@ -34,7 +34,7 @@ CREATE TABLE `operator` (
 -- Records of operator
 -- ----------------------------
 BEGIN;
-INSERT INTO `operator` (`id`, `username`, `password`, `created_at`, `updated_at`) VALUES (1, 'daodao97', '$2a$10$ylNOtEixT/OsUja.C2mI..EMYzCEW6V5qk/heBfH65lZTFX7A/FNe', '2024-07-15 06:24:57', '2024-07-15 07:45:00');
+INSERT INTO `operator` (`id`, `username`, `password`, `created_at`, `updated_at`) VALUES (1, 'test', '$2a$10$ylNOtEixT/OsUja.C2mI..EMYzCEW6V5qk/heBfH65lZTFX7A/FNe', '2024-07-15 06:24:57', '2024-07-15 07:45:00');
 COMMIT;
 
 SET FOREIGN_KEY_CHECKS = 1;
