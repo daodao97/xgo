@@ -1,6 +1,7 @@
 package xdb
 
 import (
+	"context"
 	"time"
 
 	"github.com/spf13/cast"
@@ -24,7 +25,7 @@ func Error(msg string, kv ...interface{}) {
 	xlog.Error(msg, kv...)
 }
 
-func dbLog(prefix string, start time.Time, err *error, kv *[]interface{}) {
+func dbLog(ctx context.Context, prefix string, start time.Time, err *error, kv *[]interface{}) {
 	tc := time.Since(start)
 
 	_log := []any{
@@ -49,7 +50,7 @@ func dbLog(prefix string, start time.Time, err *error, kv *[]interface{}) {
 		xlog.Error("query", _log...)
 		return
 	}
-	xlog.Debug("query", _log...)
+	xlog.DebugC(ctx, "query", _log...)
 }
 
 func indexExists(arr []any, index int) bool {

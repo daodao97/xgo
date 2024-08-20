@@ -71,7 +71,7 @@ func List(w http.ResponseWriter, r *http.Request) {
 		opt = append(opt, schema.ListRule(r)...)
 	}
 
-	count, err := m.Count(opt...)
+	count, err := m.Ctx(r.Context()).Count(opt...)
 	if err != nil {
 		xhttp.ResponseJson(w, map[string]any{
 			"code":    500,
@@ -131,7 +131,7 @@ func List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows := m.Select(opt...)
+	rows := m.Ctx(r.Context()).Select(opt...)
 	if rows.Err != nil {
 		xhttp.ResponseJson(w, map[string]any{
 			"code":    500,
@@ -189,7 +189,7 @@ func Create(w http.ResponseWriter, r *http.Request) {
 		m = schema.NewModel(r)
 	}
 
-	id, err := m.Insert(*requestBody)
+	id, err := m.Ctx(r.Context()).Insert(*requestBody)
 	if err != nil {
 		xhttp.ResponseJson(w, map[string]any{
 			"code":    500,
@@ -231,7 +231,7 @@ func Read(w http.ResponseWriter, r *http.Request) {
 		m = schema.NewModel(r)
 	}
 
-	row := m.SelectOne(opt...)
+	row := m.Ctx(r.Context()).SelectOne(opt...)
 	if row.Err != nil {
 		xhttp.ResponseJson(w, map[string]any{
 			"code":    500,
@@ -292,7 +292,7 @@ func Update(w http.ResponseWriter, r *http.Request) {
 		m = schema.NewModel(r)
 	}
 
-	_, err = m.Update(updateData, opt...)
+	_, err = m.Ctx(r.Context()).Update(updateData, opt...)
 	if err != nil {
 		xhttp.ResponseJson(w, map[string]any{
 			"code":    500,
@@ -331,7 +331,7 @@ func Delete(w http.ResponseWriter, r *http.Request) {
 		m = schema.NewModel(r)
 	}
 
-	_, err := m.Update(xdb.Record{"is_deleted": 1}, opt...)
+	_, err := m.Ctx(r.Context()).Update(xdb.Record{"is_deleted": 1}, opt...)
 	if err != nil {
 		xhttp.ResponseJson(w, map[string]any{
 			"code":    500,

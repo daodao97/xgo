@@ -86,6 +86,14 @@ func (r *Row) GetMap(key string) map[string]any {
 	return *v.(*map[string]any)
 }
 
+func (r *Row) GetAny(key string) any {
+	v, ok := r.Data[key]
+	if !ok {
+		return nil
+	}
+	return v
+}
+
 type Rows struct {
 	List []Row
 	Err  error

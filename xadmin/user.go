@@ -33,6 +33,14 @@ func SetJwt(c *JwtConf) {
 	_jwtConf = c
 }
 
+var website = map[string]any{
+	"title": "X-Admin",
+}
+
+func SetWebSite(data map[string]any) {
+	website = data
+}
+
 type User struct {
 	Username string
 	Password string
@@ -127,9 +135,7 @@ func infoHandler(w http.ResponseWriter, r *http.Request) {
 			"name":     payload["username"].(string),
 			"resource": nil,
 			"env":      "prod",
-			"website": map[string]string{
-				"title": "GptAdmin",
-			},
+			"website":  website,
 		},
 	})
 

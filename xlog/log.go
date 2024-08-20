@@ -77,6 +77,9 @@ func Warn(msg string, args ...any) {
 }
 
 func withTriceId(ctx context.Context, args ...any) []any {
+	if ctx == nil {
+		return args
+	}
 	if requestId := ctx.Value("request_id"); requestId != nil {
 		args = append(args, String("request_id", requestId.(string)))
 	}

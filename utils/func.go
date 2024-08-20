@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/json"
 	"net"
 	"net/url"
@@ -9,8 +10,11 @@ import (
 )
 
 func JsonStr(v any) string {
-	b, _ := json.Marshal(v)
-	return string(b)
+	bf := bytes.NewBuffer([]byte{})
+	jsonEncoder := json.NewEncoder(bf)
+	jsonEncoder.SetEscapeHTML(false)
+	jsonEncoder.Encode(v)
+	return bf.String()
 }
 
 func InArray[T comparable](t T, arr []T) bool {
