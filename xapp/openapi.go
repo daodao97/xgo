@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/daodao97/xgo/utils"
 	"github.com/daodao97/xgo/xlog"
 	"github.com/gin-gonic/gin"
 )
@@ -314,7 +315,7 @@ func CollectRouteInfo(engine *gin.Engine) {
 
 func RegisterAPI[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error)) gin.HandlerFunc {
 	wrappedHandler := HanderFunc(handler)
-	if !Args.EnableOpenAPI {
+	if !Args.EnableOpenAPI || !utils.IsGoRun() {
 		return wrappedHandler
 	}
 	reqType := reflect.TypeOf((*Req)(nil)).Elem()
