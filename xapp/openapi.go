@@ -382,12 +382,76 @@ func GenerateOpenAPIDoc(engine *gin.Engine, options ...OpenAPIOption) ([]byte, e
 		return nil, fmt.Errorf("please use --enable-openapi true flag")
 	}
 
-	CollectRouteInfo(engine)
-	// 翻转 apiRegistry
-	for i := 0; i < len(apiRegistry)/2; i++ {
-		j := len(apiRegistry) - 1 - i
-		apiRegistry[i], apiRegistry[j] = apiRegistry[j], apiRegistry[i]
+	var doc OpenAPIDocument
+	var jsonDoc []byte
+	var err error
+
+	if utils.IsGoRun() {
+		// 开发模式：解析并生成文档
+		doc, err = genDoc(engine, options...)
+		if err != nil {
+			return nil, err
+		}
+
+		// 将文档保存到文件
+		jsonDoc, err = json.MarshalIndent(doc, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		err = os.WriteFile("openapi.json", jsonDoc, 0644)
+		if err != nil {
+			xlog.Error("保存 openapi.json 失败", xlog.Err(err))
+		}
+	} else {
+		// 构建模式：直接读取保存的文件
+		jsonDoc, err = os.ReadFile("openapi.json")
+		if err != nil {
+			return nil, fmt.Errorf("读取 openapi.json 失败: %w", err)
+		}
+		err = json.Unmarshal(jsonDoc, &doc)
+		if err != nil {
+			return nil, fmt.Errorf("解析 openapi.json 失败: %w", err)
+		}
 	}
+
+	// 注册路由
+	engine.GET("/openapi.json", func(c *gin.Context) {
+		c.Data(http.StatusOK, "application/json", jsonDoc)
+	})
+
+	// 注册 /docs 路由
+	engine.GET("/docs", func(c *gin.Context) {
+		c.Writer.WriteHeader(http.StatusOK)
+		c.Writer.Write([]byte(`<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="SwaggerUI" />
+  <title>SwaggerUI</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
+</head>
+<body>
+<div id="swagger-ui"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
+<script>
+  window.onload = () => {
+    window.ui = SwaggerUIBundle({
+      url: '/openapi.json',
+      dom_id: '#swagger-ui',
+    });
+  };
+</script>
+	</body>
+</html>`))
+	})
+
+	xlog.Debug("openapi started")
+
+	return jsonDoc, nil
+}
+
+func genDoc(engine *gin.Engine, options ...OpenAPIOption) (OpenAPIDocument, error) {
+	CollectRouteInfo(engine)
 
 	doc := OpenAPIDocument{
 		OpenAPI: "3.0.0",
@@ -472,45 +536,7 @@ func GenerateOpenAPIDoc(engine *gin.Engine, options ...OpenAPIOption) ([]byte, e
 		doc.Paths[path] = pathItem
 	}
 
-	// 生成 JSON 文档
-	jsonDoc, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-
-	engine.GET("/openapi.json", func(c *gin.Context) {
-		c.JSON(http.StatusOK, doc)
-	})
-
-	// 注册 /docs 路由
-	engine.GET("/docs", func(c *gin.Context) {
-		c.Writer.WriteHeader(http.StatusOK)
-		c.Writer.Write([]byte(`<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="SwaggerUI" />
-  <title>SwaggerUI</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
-</head>
-<body>
-<div id="swagger-ui"></div>
-<script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
-<script>
-  window.onload = () => {
-    window.ui = SwaggerUIBundle({
-      url: '/openapi.json',
-      dom_id: '#swagger-ui',
-    });
-  };
-</script>
-	</body>
-</html>`))
-	})
-
-	xlog.Debug("openapi started")
-
-	return jsonDoc, nil
+	return doc, nil
 }
 
 func generateParameters(t reflect.Type) []Parameter {
