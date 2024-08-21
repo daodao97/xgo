@@ -13,6 +13,59 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func WithBearerAuth() OpenAPIOption {
+	return func(doc *OpenAPIDocument) {
+		if doc.Components == nil {
+			doc.Components = &Components{
+				SecuritySchemes: make(map[string]SecurityScheme),
+			}
+		}
+		doc.Components.SecuritySchemes["bearerAuth"] = SecurityScheme{
+			Type:         "http",
+			Scheme:       "bearer",
+			BearerFormat: "JWT",
+		}
+		doc.Security = append(doc.Security, map[string][]string{
+			"bearerAuth": {},
+		})
+	}
+}
+
+func WithAPIKeyAuth(name, in string) OpenAPIOption {
+	return func(doc *OpenAPIDocument) {
+		if doc.Components == nil {
+			doc.Components = &Components{
+				SecuritySchemes: make(map[string]SecurityScheme),
+			}
+		}
+		doc.Components.SecuritySchemes["apiKeyAuth"] = SecurityScheme{
+			Type: "apiKey",
+			In:   in,
+			Name: name,
+		}
+		doc.Security = append(doc.Security, map[string][]string{
+			"apiKeyAuth": {},
+		})
+	}
+}
+
+func WithBasicAuth() OpenAPIOption {
+	return func(doc *OpenAPIDocument) {
+		if doc.Components == nil {
+			doc.Components = &Components{
+				SecuritySchemes: make(map[string]SecurityScheme),
+			}
+		}
+		doc.Components.SecuritySchemes["basicAuth"] = SecurityScheme{
+			Type:   "http",
+			Scheme: "basic",
+		}
+		doc.Security = append(doc.Security, map[string][]string{
+			"basicAuth": {},
+		})
+	}
+}
+
 // 定义OpenAPI文档结构
 type OpenAPIDocument struct {
 	OpenAPI    string                `json:"openapi"`
@@ -117,6 +170,15 @@ type Schema struct {
 	Properties           map[string]Schema `json:"properties,omitempty"`
 	Items                *Schema           `json:"items,omitempty"`
 	AdditionalProperties *Schema           `json:"additionalProperties,omitempty"`
+	Description          string            `json:"description,omitempty"`
+	Required             []string          `json:"required,omitempty"`
+	Format               string            `json:"format,omitempty"`
+	Enum                 []interface{}     `json:"enum,omitempty"`
+	Minimum              *float64          `json:"minimum,omitempty"`
+	Maximum              *float64          `json:"maximum,omitempty"`
+	MinLength            *int              `json:"minLength,omitempty"`
+	MaxLength            *int              `json:"maxLength,omitempty"`
+	Pattern              string            `json:"pattern,omitempty"`
 }
 
 func generateSchema(t reflect.Type) Schema {
@@ -127,6 +189,7 @@ func generateSchema(t reflect.Type) Schema {
 	switch t.Kind() {
 	case reflect.Struct:
 		schema.Type = "object"
+		var required []string
 		for i := 0; i < t.NumField(); i++ {
 			field := t.Field(i)
 			if field.Anonymous {
@@ -135,6 +198,7 @@ func generateSchema(t reflect.Type) Schema {
 				for k, v := range embeddedSchema.Properties {
 					schema.Properties[k] = v
 				}
+				required = append(required, embeddedSchema.Required...)
 			} else {
 				jsonTag := field.Tag.Get("json")
 				if jsonTag == "-" {
@@ -144,8 +208,17 @@ func generateSchema(t reflect.Type) Schema {
 				if fieldName == "" {
 					fieldName = field.Name
 				}
-				schema.Properties[fieldName] = generateSchema(field.Type)
+				fieldSchema := generateSchema(field.Type)
+				fieldSchema.Description = generateDescription(field)
+				schema.Properties[fieldName] = fieldSchema
+
+				if isRequired(field) {
+					required = append(required, fieldName)
+				}
 			}
+		}
+		if len(required) > 0 {
+			schema.Required = required
 		}
 	case reflect.Ptr:
 		return generateSchema(t.Elem())
@@ -174,6 +247,44 @@ func generateSchema(t reflect.Type) Schema {
 	}
 
 	return schema
+}
+
+func generateDescription(field reflect.StructField) string {
+	var desc []string
+
+	// 获取 comment 标签
+	if comment := field.Tag.Get("comment"); comment != "" {
+		desc = append(desc, comment)
+	}
+
+	// 解析 binding 标签
+	if binding := field.Tag.Get("binding"); binding != "" {
+		bindingRules := strings.Split(binding, ",")
+		for _, rule := range bindingRules {
+			switch {
+			case rule == "required":
+				desc = append(desc, "此字段是必需的")
+			case rule == "email":
+				desc = append(desc, "必须是有效的电子邮件地址")
+			case rule == "url":
+				desc = append(desc, "必须是有效的URL")
+			case strings.HasPrefix(rule, "min="):
+				desc = append(desc, fmt.Sprintf("最小值为 %s", strings.TrimPrefix(rule, "min=")))
+			case strings.HasPrefix(rule, "max="):
+				desc = append(desc, fmt.Sprintf("最大值为 %s", strings.TrimPrefix(rule, "max=")))
+			case strings.HasPrefix(rule, "len="):
+				desc = append(desc, fmt.Sprintf("长度必须为 %s", strings.TrimPrefix(rule, "len=")))
+				// 可以根据需要添加更多的 binding 规则解释
+			}
+		}
+	}
+
+	return strings.Join(desc, ", ")
+}
+
+func isRequired(field reflect.StructField) bool {
+	binding := field.Tag.Get("binding")
+	return strings.Contains(binding, "required")
 }
 
 var apiRegistry []APIInfo
@@ -401,76 +512,31 @@ func GenerateOpenAPIDoc(engine *gin.Engine, options ...OpenAPIOption) ([]byte, e
 	return jsonDoc, nil
 }
 
-// 新增函数: 生成 Parameters
 func generateParameters(t reflect.Type) []Parameter {
 	var parameters []Parameter
-	schema := generateSchema(t)
-	for name, prop := range schema.Properties {
-		parameters = append(parameters, Parameter{
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		jsonTag := field.Tag.Get("json")
+		if jsonTag == "-" {
+			continue
+		}
+		name := strings.Split(jsonTag, ",")[0]
+		if name == "" {
+			name = field.Name
+		}
+
+		param := Parameter{
 			Name:        name,
-			In:          "query", // 假设所有参数都是查询参数
-			Description: "Auto-generated parameter",
-			Required:    false, // 可以根据需要修改
-			Schema:      prop,
-		})
+			In:          "query", // 默认为查询参数
+			Description: generateDescription(field),
+			Required:    isRequired(field),
+			Schema:      generateSchema(field.Type),
+		}
+		parameters = append(parameters, param)
 	}
 	return parameters
 }
 
-func WithBearerAuth() OpenAPIOption {
-	return func(doc *OpenAPIDocument) {
-		if doc.Components == nil {
-			doc.Components = &Components{
-				SecuritySchemes: make(map[string]SecurityScheme),
-			}
-		}
-		doc.Components.SecuritySchemes["bearerAuth"] = SecurityScheme{
-			Type:         "http",
-			Scheme:       "bearer",
-			BearerFormat: "JWT",
-		}
-		doc.Security = append(doc.Security, map[string][]string{
-			"bearerAuth": {},
-		})
-	}
-}
-
-func WithAPIKeyAuth(name, in string) OpenAPIOption {
-	return func(doc *OpenAPIDocument) {
-		if doc.Components == nil {
-			doc.Components = &Components{
-				SecuritySchemes: make(map[string]SecurityScheme),
-			}
-		}
-		doc.Components.SecuritySchemes["apiKeyAuth"] = SecurityScheme{
-			Type: "apiKey",
-			In:   in,
-			Name: name,
-		}
-		doc.Security = append(doc.Security, map[string][]string{
-			"apiKeyAuth": {},
-		})
-	}
-}
-
-func WithBasicAuth() OpenAPIOption {
-	return func(doc *OpenAPIDocument) {
-		if doc.Components == nil {
-			doc.Components = &Components{
-				SecuritySchemes: make(map[string]SecurityScheme),
-			}
-		}
-		doc.Components.SecuritySchemes["basicAuth"] = SecurityScheme{
-			Type:   "http",
-			Scheme: "basic",
-		}
-		doc.Security = append(doc.Security, map[string][]string{
-			"basicAuth": {},
-		})
-	}
-}
-
-// 新增函数：解析路径参数
 func parsePathParameters(path string) (string, []Parameter) {
 	parts := strings.Split(path, "/")
 	var params []Parameter
