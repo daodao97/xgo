@@ -1,0 +1,507 @@
+package xapp
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"reflect"
+	"runtime"
+	"strings"
+
+	"github.com/daodao97/xgo/xlog"
+	"github.com/gin-gonic/gin"
+)
+
+// 定义OpenAPI文档结构
+type OpenAPIDocument struct {
+	OpenAPI    string                `json:"openapi"`
+	Info       OpenAPIInfo           `json:"info"`
+	Servers    []APIServer           `json:"servers"`
+	Paths      map[string]PathItem   `json:"paths"`
+	Components *Components           `json:"components,omitempty"`
+	Security   []map[string][]string `json:"security,omitempty"`
+}
+
+type Components struct {
+	SecuritySchemes map[string]SecurityScheme `json:"securitySchemes,omitempty"`
+}
+
+type SecurityScheme struct {
+	Type         string `json:"type"`
+	Scheme       string `json:"scheme,omitempty"`
+	BearerFormat string `json:"bearerFormat,omitempty"`
+	In           string `json:"in,omitempty"`
+	Name         string `json:"name,omitempty"`
+	Description  string `json:"description,omitempty"`
+}
+
+type OpenAPIOption func(*OpenAPIDocument)
+
+func WithServer(url, description string) OpenAPIOption {
+	return func(doc *OpenAPIDocument) {
+		doc.Servers = append(doc.Servers, APIServer{
+			URL:         url,
+			Description: description,
+		})
+	}
+}
+
+func WithInfo(title, version string) OpenAPIOption {
+	return func(doc *OpenAPIDocument) {
+		doc.Info = OpenAPIInfo{
+			Title:   title,
+			Version: version,
+		}
+	}
+}
+
+type APIServer struct {
+	URL         string                    `json:"url"`
+	Description string                    `json:"description,omitempty"`
+	Variables   map[string]ServerVariable `json:"variables,omitempty"`
+}
+
+type ServerVariable struct {
+	Enum        []string `json:"enum,omitempty"`
+	Default     string   `json:"default"`
+	Description string   `json:"description,omitempty"`
+}
+
+type OpenAPIInfo struct {
+	Title   string `json:"title"`
+	Version string `json:"version"`
+}
+
+type PathItem struct {
+	Get    *Operation `json:"get,omitempty"`
+	Post   *Operation `json:"post,omitempty"`
+	Put    *Operation `json:"put,omitempty"`
+	Delete *Operation `json:"delete,omitempty"`
+	Patch  *Operation `json:"patch,omitempty"`
+	// 其他HTTP方法...
+}
+
+type Operation struct {
+	Tags        []string            `json:"tags,omitempty"`
+	Summary     string              `json:"summary"`
+	Description string              `json:"description"`
+	Parameters  []Parameter         `json:"parameters,omitempty"`
+	RequestBody *RequestBody        `json:"requestBody,omitempty"`
+	Responses   map[string]Response `json:"responses"`
+}
+
+type Parameter struct {
+	Name        string `json:"name"`
+	In          string `json:"in"`
+	Description string `json:"description"`
+	Required    bool   `json:"required"`
+	Schema      Schema `json:"schema"`
+}
+
+type RequestBody struct {
+	Content map[string]MediaType `json:"content"`
+}
+
+type Response struct {
+	Description string               `json:"description"`
+	Content     map[string]MediaType `json:"content"`
+}
+
+type MediaType struct {
+	Schema Schema `json:"schema"`
+}
+
+type Schema struct {
+	Type                 string            `json:"type,omitempty"`
+	Properties           map[string]Schema `json:"properties,omitempty"`
+	Items                *Schema           `json:"items,omitempty"`
+	AdditionalProperties *Schema           `json:"additionalProperties,omitempty"`
+}
+
+func generateSchema(t reflect.Type) Schema {
+	schema := Schema{
+		Properties: make(map[string]Schema),
+	}
+
+	switch t.Kind() {
+	case reflect.Struct:
+		schema.Type = "object"
+		for i := 0; i < t.NumField(); i++ {
+			field := t.Field(i)
+			if field.Anonymous {
+				// 处理匿名字段（嵌入式结构体）
+				embeddedSchema := generateSchema(field.Type)
+				for k, v := range embeddedSchema.Properties {
+					schema.Properties[k] = v
+				}
+			} else {
+				jsonTag := field.Tag.Get("json")
+				if jsonTag == "-" {
+					continue // 跳过被标记为忽略的字段
+				}
+				fieldName := strings.Split(jsonTag, ",")[0]
+				if fieldName == "" {
+					fieldName = field.Name
+				}
+				schema.Properties[fieldName] = generateSchema(field.Type)
+			}
+		}
+	case reflect.Ptr:
+		return generateSchema(t.Elem())
+	case reflect.Slice, reflect.Array:
+		schema.Type = "array"
+		schema.Items = &Schema{
+			Properties: generateSchema(t.Elem()).Properties,
+		}
+	case reflect.Map:
+		schema.Type = "object"
+		schema.AdditionalProperties = &Schema{
+			Properties: generateSchema(t.Elem()).Properties,
+		}
+	case reflect.String:
+		schema.Type = "string"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		schema.Type = "integer"
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		schema.Type = "integer"
+	case reflect.Float32, reflect.Float64:
+		schema.Type = "number"
+	case reflect.Bool:
+		schema.Type = "boolean"
+	default:
+		schema.Type = "string" // 默认处理为字符串
+	}
+
+	return schema
+}
+
+var apiRegistry []APIInfo
+
+type APIInfo struct {
+	Path         string
+	Method       string
+	RequestType  reflect.Type
+	ResponseType reflect.Type
+	Handler      gin.HandlerFunc
+	Summary      string
+	Description  string
+}
+
+func CollectRouteInfo(engine *gin.Engine) {
+	routes := engine.Routes()
+	for _, route := range routes {
+		for i, info := range apiRegistry {
+			if info.Path == "" && reflect.ValueOf(route.HandlerFunc).Pointer() == reflect.ValueOf(info.Handler).Pointer() {
+				apiRegistry[i].Path = route.Path
+				apiRegistry[i].Method = route.Method
+				break
+			}
+		}
+	}
+}
+
+func RegisterAPI[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error)) gin.HandlerFunc {
+	wrappedHandler := HanderFunc(handler)
+	if !Args.EnableOpenAPI {
+		return wrappedHandler
+	}
+	reqType := reflect.TypeOf((*Req)(nil)).Elem()
+	respType := reflect.TypeOf((*Resp)(nil)).Elem()
+
+	// 获取handler函数的信息
+	handlerValue := reflect.ValueOf(handler)
+	handlerPtr := handlerValue.Pointer()
+	handlerFunc := runtime.FuncForPC(handlerPtr)
+	if handlerFunc == nil {
+		xlog.Error("无法获取handler函数信息")
+	} else {
+		fileName, lineNumber := handlerFunc.FileLine(handlerPtr)
+		// fmt.Printf("Handler函数位置: %s:%d\n", fileName, lineNumber)
+
+		fileContent, err := os.ReadFile(fileName)
+		if err != nil {
+			xlog.Error("read file error", xlog.Err(err))
+		} else {
+			lines := strings.Split(string(fileContent), "\n")
+			// fmt.Printf("文件总行数: %d\n", len(lines))
+
+			var comments []string
+			for i := lineNumber - 2; i >= 0; i-- {
+				line := strings.TrimSpace(lines[i])
+				if strings.HasPrefix(line, "//") {
+					comments = append([]string{strings.TrimPrefix(line, "//")}, comments...)
+				} else {
+					break
+				}
+			}
+
+			summary, description := parseComments(strings.Join(comments, "\n"))
+			// fmt.Printf("提取的注释: summary=%s, description=%s\n", summary, description)
+
+			apiRegistry = append(apiRegistry, APIInfo{
+				RequestType:  reqType,
+				ResponseType: respType,
+				Handler:      wrappedHandler,
+				Summary:      summary,
+				Description:  description,
+			})
+		}
+	}
+
+	return wrappedHandler
+}
+
+func parseComments(comments string) (summary, description string) {
+	lines := strings.Split(comments, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "@summary") {
+			summary = strings.TrimSpace(strings.TrimPrefix(line, "@summary"))
+		} else if strings.HasPrefix(line, "@description") {
+			description = strings.TrimSpace(strings.TrimPrefix(line, "@description"))
+		}
+	}
+	return
+}
+
+func GenerateOpenAPIDoc(engine *gin.Engine, options ...OpenAPIOption) ([]byte, error) {
+	if !Args.EnableOpenAPI {
+		return nil, fmt.Errorf("please use --enable-openapi true flag")
+	}
+
+	CollectRouteInfo(engine)
+	// 翻转 apiRegistry
+	for i := 0; i < len(apiRegistry)/2; i++ {
+		j := len(apiRegistry) - 1 - i
+		apiRegistry[i], apiRegistry[j] = apiRegistry[j], apiRegistry[i]
+	}
+
+	doc := OpenAPIDocument{
+		OpenAPI: "3.0.0",
+		Info: OpenAPIInfo{
+			Title:   "API Documentation",
+			Version: "1.0.0",
+		},
+		Servers: []APIServer{},
+		Paths:   make(map[string]PathItem),
+	}
+
+	for _, option := range options {
+		option(&doc)
+	}
+
+	// 如果没有设置服务器，添加一个默认的本地服务器
+	if len(doc.Servers) == 0 {
+		doc.Servers = append(doc.Servers, APIServer{
+			URL:         "http://" + Args.Bind,
+			Description: "Local development server",
+		})
+	}
+
+	for _, api := range apiRegistry {
+		// 解析路径参数
+		path, pathParams := parsePathParameters(api.Path)
+
+		// 根据路径前缀生成标签
+		tags := generateTags(path)
+
+		pathItem, ok := doc.Paths[path]
+		if !ok {
+			pathItem = PathItem{}
+		}
+
+		operation := Operation{
+			Tags:        tags,
+			Summary:     api.Summary,
+			Description: api.Description,
+			Responses: map[string]Response{
+				"200": {
+					Description: "Successful response",
+					Content: map[string]MediaType{
+						"application/json": {
+							Schema: generateSchema(api.ResponseType),
+						},
+					},
+				},
+			},
+		}
+
+		// 添加路径参数
+		operation.Parameters = append(operation.Parameters, pathParams...)
+
+		// 根据 HTTP 方法决定使用 Parameters 还是 RequestBody
+		switch api.Method {
+		case "GET", "DELETE":
+			operation.Parameters = append(operation.Parameters, generateParameters(api.RequestType)...)
+		case "POST", "PUT", "PATCH":
+			operation.RequestBody = &RequestBody{
+				Content: map[string]MediaType{
+					"application/json": {
+						Schema: generateSchema(api.RequestType),
+					},
+				},
+			}
+		}
+
+		switch api.Method {
+		case "GET":
+			pathItem.Get = &operation
+		case "POST":
+			pathItem.Post = &operation
+		case "PUT":
+			pathItem.Put = &operation
+		case "DELETE":
+			pathItem.Delete = &operation
+		case "PATCH":
+			pathItem.Patch = &operation
+		}
+
+		doc.Paths[path] = pathItem
+	}
+
+	// 生成 JSON 文档
+	jsonDoc, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+
+	engine.GET("/openapi.json", func(c *gin.Context) {
+		c.JSON(http.StatusOK, doc)
+	})
+
+	// 注册 /docs 路由
+	engine.GET("/docs", func(c *gin.Context) {
+		c.Writer.WriteHeader(http.StatusOK)
+		c.Writer.Write([]byte(`<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="SwaggerUI" />
+  <title>SwaggerUI</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
+</head>
+<body>
+<div id="swagger-ui"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
+<script>
+  window.onload = () => {
+    window.ui = SwaggerUIBundle({
+      url: '/openapi.json',
+      dom_id: '#swagger-ui',
+    });
+  };
+</script>
+	</body>
+</html>`))
+	})
+
+	xlog.Debug("openapi started")
+
+	return jsonDoc, nil
+}
+
+// 新增函数: 生成 Parameters
+func generateParameters(t reflect.Type) []Parameter {
+	var parameters []Parameter
+	schema := generateSchema(t)
+	for name, prop := range schema.Properties {
+		parameters = append(parameters, Parameter{
+			Name:        name,
+			In:          "query", // 假设所有参数都是查询参数
+			Description: "Auto-generated parameter",
+			Required:    false, // 可以根据需要修改
+			Schema:      prop,
+		})
+	}
+	return parameters
+}
+
+func WithBearerAuth() OpenAPIOption {
+	return func(doc *OpenAPIDocument) {
+		if doc.Components == nil {
+			doc.Components = &Components{
+				SecuritySchemes: make(map[string]SecurityScheme),
+			}
+		}
+		doc.Components.SecuritySchemes["bearerAuth"] = SecurityScheme{
+			Type:         "http",
+			Scheme:       "bearer",
+			BearerFormat: "JWT",
+		}
+		doc.Security = append(doc.Security, map[string][]string{
+			"bearerAuth": {},
+		})
+	}
+}
+
+func WithAPIKeyAuth(name, in string) OpenAPIOption {
+	return func(doc *OpenAPIDocument) {
+		if doc.Components == nil {
+			doc.Components = &Components{
+				SecuritySchemes: make(map[string]SecurityScheme),
+			}
+		}
+		doc.Components.SecuritySchemes["apiKeyAuth"] = SecurityScheme{
+			Type: "apiKey",
+			In:   in,
+			Name: name,
+		}
+		doc.Security = append(doc.Security, map[string][]string{
+			"apiKeyAuth": {},
+		})
+	}
+}
+
+func WithBasicAuth() OpenAPIOption {
+	return func(doc *OpenAPIDocument) {
+		if doc.Components == nil {
+			doc.Components = &Components{
+				SecuritySchemes: make(map[string]SecurityScheme),
+			}
+		}
+		doc.Components.SecuritySchemes["basicAuth"] = SecurityScheme{
+			Type:   "http",
+			Scheme: "basic",
+		}
+		doc.Security = append(doc.Security, map[string][]string{
+			"basicAuth": {},
+		})
+	}
+}
+
+// 新增函数：解析路径参数
+func parsePathParameters(path string) (string, []Parameter) {
+	parts := strings.Split(path, "/")
+	var params []Parameter
+	var newParts []string
+
+	for _, part := range parts {
+		if strings.HasPrefix(part, ":") {
+			paramName := strings.TrimPrefix(part, ":")
+			params = append(params, Parameter{
+				Name:        paramName,
+				In:          "path",
+				Description: "Path parameter " + paramName,
+				Required:    true,
+				Schema: Schema{
+					Type: "string",
+				},
+			})
+			newParts = append(newParts, "{"+paramName+"}")
+		} else {
+			newParts = append(newParts, part)
+		}
+	}
+
+	return strings.Join(newParts, "/"), params
+}
+
+// 新增函数：根据路径生成标签
+func generateTags(path string) []string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) > 0 {
+		return []string{parts[0]}
+	}
+	return []string{"default"}
+}

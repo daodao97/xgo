@@ -2,6 +2,7 @@ package xapp
 
 import (
 	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,10 @@ func NewGin() *gin.Engine {
 	logger := SlogWriter{logger: xlog.GetLogger()}
 	gin.DefaultWriter = logger
 	gin.DefaultErrorWriter = logger
+	gin.DebugPrintRouteFunc = func(httpMethod, absolutePath, handlerName string, nuHandlers int) {
+		xlog.Debug("route", xlog.String("method", httpMethod), xlog.String("path", absolutePath), xlog.String("handler", handlerName))
+	}
+	//gin.DebugPrintFunc = func(format string, values ...interface{}) {}
 	if !utils.IsGoRun() {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -42,7 +47,7 @@ func NewGin() *gin.Engine {
 		latency := end.Sub(start)
 
 		// 使用 slog 记录结构化日志
-		xlog.DebugC(c, "HTTP Request",
+		xlog.DebugC(c, "http request",
 			slog.String("client_ip", c.ClientIP()),
 			slog.String("time", end.Format(time.DateTime)),
 			slog.Int("status_code", c.Writer.Status()),
@@ -52,5 +57,45 @@ func NewGin() *gin.Engine {
 			slog.String("error_message", c.Errors.ByType(gin.ErrorTypePrivate).String()),
 		)
 	})
+
 	return r
+}
+
+func NewGinHttpServer(addr string, engine func() *gin.Engine) NewServer {
+	return func() Server {
+		return &HTTPServer{
+			server: &http.Server{
+				Addr:    addr,
+				Handler: engine(),
+			},
+		}
+	}
+}
+
+func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error)) func(*gin.Context) {
+	return func(c *gin.Context) {
+		var req Req
+		if err := c.ShouldBind(&req); err != nil {
+			c.JSON(200, gin.H{
+				"code":    400,
+				"message": err.Error(),
+			})
+			return
+		}
+
+		resp, err := handler(c, req)
+		if err != nil {
+			c.JSON(200, gin.H{
+				"code":    500,
+				"message": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(200, gin.H{
+			"code":    0,
+			"message": "success",
+			"data":    resp,
+		})
+	}
 }

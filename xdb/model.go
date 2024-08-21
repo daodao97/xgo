@@ -64,14 +64,22 @@ func (r Record) GetTime(key string) *time.Time {
 	return v.(*time.Time)
 }
 
+func (r Record) GetAny(key string) any {
+	v, ok := r[key]
+	if !ok {
+		return nil
+	}
+	return v
+}
+
 type Model interface {
 	PrimaryKey() string
 	//Deprecated: use Selects instead
 	Select(opt ...Option) (rows *Rows)
 	//Deprecated: use Single instead
 	SelectOne(opt ...Option) *Row
-	Selects(opt ...Option) ([]Row, error)
-	Single(opt ...Option) (Row, error)
+	Selects(opt ...Option) ([]Record, error)
+	Single(opt ...Option) (Record, error)
 	Count(opt ...Option) (count int64, err error)
 	Insert(record Record) (lastId int64, err error)
 	Update(record Record, opt ...Option) (ok bool, err error)
@@ -223,15 +231,21 @@ func (m *model) Select(opt ...Option) (rows *Rows) {
 	return &Rows{List: res, Err: err}
 }
 
-func (m *model) Selects(opt ...Option) ([]Row, error) {
+func (m *model) Selects(opt ...Option) ([]Record, error) {
 	rows := m.Select(opt...)
 	if rows.Err != nil {
 		return nil, rows.Err
 	}
 	if len(rows.List) == 0 {
-		return []Row{}, nil
+		return []Record{}, nil
 	}
-	return rows.List, nil
+
+	var records []Record
+	for _, row := range rows.List {
+		records = append(records, row.Data)
+	}
+
+	return records, nil
 }
 
 func (m *model) SelectOne(opt ...Option) *Row {
@@ -248,15 +262,15 @@ func (m *model) SelectOne(opt ...Option) *Row {
 	return &rows.List[0]
 }
 
-func (m *model) Single(opt ...Option) (Row, error) {
+func (m *model) Single(opt ...Option) (Record, error) {
 	rows := m.Select(opt...)
 	if rows.Err != nil {
-		return Row{}, rows.Err
+		return nil, rows.Err
 	}
 	if len(rows.List) == 0 {
-		return Row{}, ErrNotFound
+		return nil, ErrNotFound
 	}
-	return rows.List[0], nil
+	return rows.List[0].Data, nil
 }
 
 func (m *model) Count(opt ...Option) (count int64, err error) {

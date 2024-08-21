@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/daodao97/xgo/xlog"
+	"github.com/jessevdk/go-flags"
 )
 
 type Startup func() error
@@ -26,6 +27,11 @@ type Server interface {
 	Stop()
 }
 
+var Args struct {
+	Bind          string `long:"bind" description:"Bind address" default:"127.0.0.1:4001" env:"BIND"`
+	EnableOpenAPI bool   `long:"enable-openapi" description:"Enable OpenAPI" env:"ENABLE_OPENAPI"`
+}
+
 type App struct {
 	startups     []Startup
 	servers      []NewServer
@@ -34,6 +40,12 @@ type App struct {
 }
 
 func NewApp() *App {
+	_, err := flags.Parse(&Args)
+	if err != nil {
+		fmt.Println("parse flags error")
+		os.Exit(1)
+	}
+
 	return &App{}
 }
 
