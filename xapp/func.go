@@ -12,6 +12,6 @@ func IsTest() bool {
 	return Args.AppEnv == "test"
 }
 
-func IsLocal() bool {
-	return Args.AppEnv == "local"
+func IsDev() bool {
+	return Args.AppEnv == "dev"
 }

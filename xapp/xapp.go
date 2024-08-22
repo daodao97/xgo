@@ -30,7 +30,7 @@ type Server interface {
 var Args struct {
 	Bind          string `long:"bind" description:"Bind address" default:"127.0.0.1:4001" env:"BIND"`
 	EnableOpenAPI bool   `long:"enable-openapi" description:"Enable OpenAPI" env:"ENABLE_OPENAPI"`
-	AppEnv        string `long:"app-env" description:"App environment" env:"APP_ENV" default:"prod"`
+	AppEnv        string `long:"app-env" description:"App environment" env:"APP_ENV" default:"dev"`
 }
 
 type App struct {
@@ -46,6 +46,8 @@ func NewApp() *App {
 		fmt.Println("parse flags error")
 		os.Exit(1)
 	}
+
+	xlog.Debug("app args", xlog.Any("args", fmt.Sprintf("%+v", Args)))
 
 	return &App{}
 }

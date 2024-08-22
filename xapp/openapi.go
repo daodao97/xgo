@@ -315,49 +315,53 @@ func CollectRouteInfo(engine *gin.Engine) {
 
 func RegisterAPI[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error)) gin.HandlerFunc {
 	wrappedHandler := HanderFunc(handler)
-	if !Args.EnableOpenAPI || !utils.IsGoRun() {
+
+	if !Args.EnableOpenAPI {
 		return wrappedHandler
 	}
-	reqType := reflect.TypeOf((*Req)(nil)).Elem()
-	respType := reflect.TypeOf((*Resp)(nil)).Elem()
 
-	// 获取handler函数的信息
-	handlerValue := reflect.ValueOf(handler)
-	handlerPtr := handlerValue.Pointer()
-	handlerFunc := runtime.FuncForPC(handlerPtr)
-	if handlerFunc == nil {
-		xlog.Error("无法获取handler函数信息")
-	} else {
-		fileName, lineNumber := handlerFunc.FileLine(handlerPtr)
-		// fmt.Printf("Handler函数位置: %s:%d\n", fileName, lineNumber)
+	if utils.IsGoRun() {
+		reqType := reflect.TypeOf((*Req)(nil)).Elem()
+		respType := reflect.TypeOf((*Resp)(nil)).Elem()
 
-		fileContent, err := os.ReadFile(fileName)
-		if err != nil {
-			xlog.Error("read file error", xlog.Err(err))
+		// 获取handler函数的信息
+		handlerValue := reflect.ValueOf(handler)
+		handlerPtr := handlerValue.Pointer()
+		handlerFunc := runtime.FuncForPC(handlerPtr)
+		if handlerFunc == nil {
+			xlog.Error("无法获取handler函数信息")
 		} else {
-			lines := strings.Split(string(fileContent), "\n")
-			// fmt.Printf("文件总行数: %d\n", len(lines))
+			fileName, lineNumber := handlerFunc.FileLine(handlerPtr)
+			// fmt.Printf("Handler函数位置: %s:%d\n", fileName, lineNumber)
 
-			var comments []string
-			for i := lineNumber - 2; i >= 0; i-- {
-				line := strings.TrimSpace(lines[i])
-				if strings.HasPrefix(line, "//") {
-					comments = append([]string{strings.TrimPrefix(line, "//")}, comments...)
-				} else {
-					break
+			fileContent, err := os.ReadFile(fileName)
+			if err != nil {
+				xlog.Error("read file error", xlog.Err(err))
+			} else {
+				lines := strings.Split(string(fileContent), "\n")
+				// fmt.Printf("文件总行数: %d\n", len(lines))
+
+				var comments []string
+				for i := lineNumber - 2; i >= 0; i-- {
+					line := strings.TrimSpace(lines[i])
+					if strings.HasPrefix(line, "//") {
+						comments = append([]string{strings.TrimPrefix(line, "//")}, comments...)
+					} else {
+						break
+					}
 				}
+
+				summary, description := parseComments(strings.Join(comments, "\n"))
+				// fmt.Printf("提取的注释: summary=%s, description=%s\n", summary, description)
+
+				apiRegistry = append(apiRegistry, APIInfo{
+					RequestType:  reqType,
+					ResponseType: respType,
+					Handler:      wrappedHandler,
+					Summary:      summary,
+					Description:  description,
+				})
 			}
-
-			summary, description := parseComments(strings.Join(comments, "\n"))
-			// fmt.Printf("提取的注释: summary=%s, description=%s\n", summary, description)
-
-			apiRegistry = append(apiRegistry, APIInfo{
-				RequestType:  reqType,
-				ResponseType: respType,
-				Handler:      wrappedHandler,
-				Summary:      summary,
-				Description:  description,
-			})
 		}
 	}
 
@@ -445,7 +449,7 @@ func GenerateOpenAPIDoc(engine *gin.Engine, options ...OpenAPIOption) ([]byte, e
 </html>`))
 	})
 
-	xlog.Debug("openapi started")
+	xlog.Debug(fmt.Sprintf("openapi started at %s", "http://"+Args.Bind+"/docs"))
 
 	return jsonDoc, nil
 }

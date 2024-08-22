@@ -34,6 +34,13 @@ func NewGin() *gin.Engine {
 	gin.DebugPrintRouteFunc = func(httpMethod, absolutePath, handlerName string, nuHandlers int) {
 		xlog.Debug("route", xlog.String("method", httpMethod), xlog.String("path", absolutePath), xlog.String("handler", handlerName))
 	}
+	if IsProd() {
+		gin.SetMode(gin.ReleaseMode)
+	} else if IsTest() {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.DebugMode)
+	}
 	//gin.DebugPrintFunc = func(format string, values ...interface{}) {}
 	if !utils.IsGoRun() {
 		gin.SetMode(gin.ReleaseMode)
