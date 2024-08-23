@@ -282,6 +282,76 @@ func generateDescription(field reflect.StructField) string {
 				desc = append(desc, fmt.Sprintf("长度必须为 %s", strings.TrimPrefix(rule, "len=")))
 			case strings.HasPrefix(rule, "oneof="):
 				desc = append(desc, fmt.Sprintf("枚举值: %s", strings.TrimPrefix(rule, "oneof=")))
+			case rule == "eq":
+				desc = append(desc, fmt.Sprintf("必须等于 %s", strings.TrimPrefix(rule, "eq=")))
+			case rule == "ne":
+				desc = append(desc, fmt.Sprintf("不能等于 %s", strings.TrimPrefix(rule, "ne=")))
+			case rule == "lt":
+				desc = append(desc, fmt.Sprintf("必须小于 %s", strings.TrimPrefix(rule, "lt=")))
+			case rule == "lte":
+				desc = append(desc, fmt.Sprintf("必须小于或等于 %s", strings.TrimPrefix(rule, "lte=")))
+			case rule == "gt":
+				desc = append(desc, fmt.Sprintf("必须大于 %s", strings.TrimPrefix(rule, "gt=")))
+			case rule == "gte":
+				desc = append(desc, fmt.Sprintf("必须大于或等于 %s", strings.TrimPrefix(rule, "gte=")))
+			case rule == "alpha":
+				desc = append(desc, "只能包含字母")
+			case rule == "alphanum":
+				desc = append(desc, "只能包含字母和数字")
+			case rule == "numeric":
+				desc = append(desc, "必须是数字")
+			case strings.HasPrefix(rule, "eqfield="):
+				desc = append(desc, fmt.Sprintf("必须等于 %s 字段", strings.TrimPrefix(rule, "eqfield=")))
+			case strings.HasPrefix(rule, "nefield="):
+				desc = append(desc, fmt.Sprintf("不能等于 %s 字段", strings.TrimPrefix(rule, "nefield=")))
+			case strings.HasPrefix(rule, "gtfield="):
+				desc = append(desc, fmt.Sprintf("必须大于 %s 字段", strings.TrimPrefix(rule, "gtfield=")))
+			case strings.HasPrefix(rule, "gtefield="):
+				desc = append(desc, fmt.Sprintf("必须大于或等于 %s 字段", strings.TrimPrefix(rule, "gtefield=")))
+			case strings.HasPrefix(rule, "ltfield="):
+				desc = append(desc, fmt.Sprintf("必须小于 %s 字段", strings.TrimPrefix(rule, "ltfield=")))
+			case strings.HasPrefix(rule, "ltefield="):
+				desc = append(desc, fmt.Sprintf("必须小于或等于 %s 字段", strings.TrimPrefix(rule, "ltefield=")))
+			case rule == "isdefault":
+				desc = append(desc, "必须是默认值")
+			case rule == "unique":
+				desc = append(desc, "必须是唯一的")
+			case rule == "alphaunicode":
+				desc = append(desc, "只能包含 unicode 字符")
+			case rule == "alphanumunicode":
+				desc = append(desc, "只能包含 unicode 字母和数字")
+			case rule == "lowercase":
+				desc = append(desc, "只能包含小写字符")
+			case rule == "uppercase":
+				desc = append(desc, "只能包含大写字符")
+			case rule == "json":
+				desc = append(desc, "必须是有效的 JSON")
+			case rule == "file":
+				desc = append(desc, "必须是有效的文件路径")
+			case rule == "uri":
+				desc = append(desc, "必须是有效的 URI")
+			case rule == "base64":
+				desc = append(desc, "必须是有效的 base64 值")
+			case strings.HasPrefix(rule, "contains="):
+				desc = append(desc, fmt.Sprintf("必须包含 %s", strings.TrimPrefix(rule, "contains=")))
+			case strings.HasPrefix(rule, "containsany="):
+				desc = append(desc, fmt.Sprintf("必须包含 %s 中的任何字符", strings.TrimPrefix(rule, "containsany=")))
+			case strings.HasPrefix(rule, "excludes="):
+				desc = append(desc, fmt.Sprintf("不能包含 %s", strings.TrimPrefix(rule, "excludes=")))
+			case strings.HasPrefix(rule, "excludesall="):
+				desc = append(desc, fmt.Sprintf("不能包含 %s 中的任何字符", strings.TrimPrefix(rule, "excludesall=")))
+			case strings.HasPrefix(rule, "startswith="):
+				desc = append(desc, fmt.Sprintf("必须以 %s 开始", strings.TrimPrefix(rule, "startswith=")))
+			case strings.HasPrefix(rule, "endswith="):
+				desc = append(desc, fmt.Sprintf("必须以 %s 结束", strings.TrimPrefix(rule, "endswith=")))
+			case rule == "ip":
+				desc = append(desc, "必须是有效的 IP 地址")
+			case rule == "ipv4":
+				desc = append(desc, "必须是有效的 IPv4 地址")
+			case rule == "datetime":
+				desc = append(desc, "必须是有效的日期时间")
+			case rule == "omitempty":
+				desc = append(desc, "非必须")
 			}
 		}
 	}
