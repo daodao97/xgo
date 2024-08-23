@@ -258,9 +258,9 @@ func generateDescription(field reflect.StructField) string {
 		desc = append(desc, comment)
 	}
 
-	// 解析 comment 标签
-	if comment := field.Tag.Get("comment"); comment != "" {
-		desc = append(desc, comment)
+	// 解析 default 标签
+	if defaultVal := field.Tag.Get("default"); defaultVal != "" {
+		desc = append(desc, fmt.Sprintf("默认值: %s", defaultVal))
 	}
 
 	// 解析 binding 标签
@@ -280,7 +280,8 @@ func generateDescription(field reflect.StructField) string {
 				desc = append(desc, fmt.Sprintf("最大值为 %s", strings.TrimPrefix(rule, "max=")))
 			case strings.HasPrefix(rule, "len="):
 				desc = append(desc, fmt.Sprintf("长度必须为 %s", strings.TrimPrefix(rule, "len=")))
-				// 可以根据需要添加更多的 binding 规则解释
+			case strings.HasPrefix(rule, "enum="):
+				desc = append(desc, fmt.Sprintf("枚举值: %s", strings.TrimPrefix(rule, "enum=")))
 			}
 		}
 	}
