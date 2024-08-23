@@ -1,17 +1,14 @@
 package xapp
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
 
 	"github.com/daodao97/xgo/triceid"
 	"github.com/daodao97/xgo/utils"
@@ -83,26 +80,6 @@ func NewGinHttpServer(addr string, engine func() *gin.Engine) NewServer {
 			},
 		}
 	}
-}
-
-func translateError(err error) string {
-	if validationErrors, ok := err.(validator.ValidationErrors); ok {
-		var errMsgs []string
-		for _, e := range validationErrors {
-			switch e.Tag() {
-			case "required":
-				errMsgs = append(errMsgs, fmt.Sprintf("%s 是必填字段", e.Field()))
-			case "min":
-				errMsgs = append(errMsgs, fmt.Sprintf("%s 的长度不能小于 %s", e.Field(), e.Param()))
-			case "max":
-				errMsgs = append(errMsgs, fmt.Sprintf("%s 的长度不能大于 %s", e.Field(), e.Param()))
-			default:
-				errMsgs = append(errMsgs, fmt.Sprintf("%s 字段验证失败", e.Field()))
-			}
-		}
-		return strings.Join(errMsgs, "; ")
-	}
-	return err.Error()
 }
 
 func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error)) func(*gin.Context) {
