@@ -258,6 +258,11 @@ func generateDescription(field reflect.StructField) string {
 		desc = append(desc, comment)
 	}
 
+	// 解析 comment 标签
+	if comment := field.Tag.Get("comment"); comment != "" {
+		desc = append(desc, comment)
+	}
+
 	// 解析 binding 标签
 	if binding := field.Tag.Get("binding"); binding != "" {
 		bindingRules := strings.Split(binding, ",")
