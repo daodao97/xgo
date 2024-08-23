@@ -280,8 +280,8 @@ func generateDescription(field reflect.StructField) string {
 				desc = append(desc, fmt.Sprintf("最大值为 %s", strings.TrimPrefix(rule, "max=")))
 			case strings.HasPrefix(rule, "len="):
 				desc = append(desc, fmt.Sprintf("长度必须为 %s", strings.TrimPrefix(rule, "len=")))
-			case strings.HasPrefix(rule, "enum="):
-				desc = append(desc, fmt.Sprintf("枚举值: %s", strings.TrimPrefix(rule, "enum=")))
+			case strings.HasPrefix(rule, "oneof="):
+				desc = append(desc, fmt.Sprintf("枚举值: %s", strings.TrimPrefix(rule, "oneof=")))
 			}
 		}
 	}
