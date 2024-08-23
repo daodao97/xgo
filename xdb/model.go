@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/spf13/cast"
 
@@ -70,6 +71,35 @@ func (r Record) GetAny(key string) any {
 		return nil
 	}
 	return v
+}
+
+func (r Record) GetBool(key string) bool {
+	v, ok := r[key]
+	if !ok {
+		return false
+	}
+	return cast.ToBool(v)
+}
+
+func (r Record) GetFloat64(key string) float64 {
+	v, ok := r[key]
+	if !ok {
+		return 0
+	}
+	return cast.ToFloat64(v)
+}
+
+func (r Record) GetRecord(key string) Record {
+	v, ok := r[key]
+	if !ok {
+		return nil
+	}
+
+	var record Record
+
+	mapstructure.Decode(v, &record)
+
+	return record
 }
 
 type Model interface {
