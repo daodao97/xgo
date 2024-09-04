@@ -389,6 +389,8 @@ func CollectRouteInfo(engine *gin.Engine) {
 	}
 }
 
+type Empty struct{}
+
 func RegisterAPI[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error)) gin.HandlerFunc {
 	wrappedHandler := HanderFunc(handler)
 
