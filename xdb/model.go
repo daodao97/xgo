@@ -415,7 +415,7 @@ func (m *model) Update(record Record, opt ...Option) (ok bool, err error) {
 	opt = append(opt, table(m.table), Field(ks...), Value(vs...))
 
 	_sql, args := UpdateBuilder(opt...)
-	kv = append(kv, "sql", _sql, "args", vs)
+	kv = append(kv, "sql", _sql, "args", args)
 
 	result, err := exec(m.client, _sql, args...)
 	if err != nil {
