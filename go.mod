@@ -3,6 +3,8 @@ module github.com/daodao97/xgo
 go 1.21.1
 
 require (
+	github.com/bogdanfinn/fhttp v0.5.28
+	github.com/bogdanfinn/tls-client v1.7.8
 	github.com/cloudflare/tableflip v1.2.3
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/fatih/color v1.17.0
@@ -29,6 +31,15 @@ require (
 )
 
 require (
+	github.com/andybalholm/brotli v1.0.5 // indirect
+	github.com/bogdanfinn/utls v1.6.1 // indirect
+	github.com/cloudflare/circl v1.3.6 // indirect
+	github.com/klauspost/compress v1.17.2 // indirect
+	github.com/quic-go/quic-go v0.37.4 // indirect
+	github.com/tam7t/hpkp v0.0.0-20160821193359-2b70b4024ed5 // indirect
+)
+
+require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/sonic v1.11.6 // indirect
@@ -41,7 +52,7 @@ require (
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/go-playground/validator/v10 v10.20.0 // indirect
+	github.com/go-playground/validator/v10 v10.20.0
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jessevdk/go-flags v1.6.1

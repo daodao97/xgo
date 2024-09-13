@@ -9,18 +9,31 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-func NewRateLimiter(period time.Duration, limit int, prefix string) *RateLimit {
+type RateLimitOptions struct {
+	Messags string
+}
+
+type RateLimitOption func(options *RateLimitOptions)
+
+func NewRateLimiter(period time.Duration, limit int, prefix string, opts ...RateLimitOption) *RateLimit {
+	options := &RateLimitOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
 	return &RateLimit{
-		Period: period,
-		Limit:  limit,
-		Prefix: prefix,
+		Period:  period,
+		Limit:   limit,
+		Prefix:  prefix,
+		Messags: options.Messags,
 	}
 }
 
 type RateLimit struct {
-	Period time.Duration
-	Limit  int
-	Prefix string
+	Period  time.Duration
+	Limit   int
+	Prefix  string
+	Messags string
 }
 
 func (r RateLimit) key(k string) string {

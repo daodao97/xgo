@@ -42,11 +42,7 @@ type App struct {
 }
 
 func NewApp() *App {
-	_, err := flags.Parse(&Args)
-	if err != nil {
-		fmt.Println("parse flags error")
-		os.Exit(1)
-	}
+	ParserFlags(&Args)
 
 	xlog.Debug("app args", xlog.Any("args", fmt.Sprintf("%+v", Args)))
 
@@ -135,4 +131,13 @@ func (a *App) Run() error {
 	wg.Wait()
 	xlog.Debug("All servers stopped")
 	return nil
+}
+
+func ParserFlags(dest any) {
+	parser := flags.NewParser(dest, flags.IgnoreUnknown)
+	_, err := parser.Parse()
+	if err != nil {
+		fmt.Println("parse flags error")
+		os.Exit(1)
+	}
 }
