@@ -175,3 +175,25 @@ func rows2SliceMap(rows *sql.Rows) (list []Row, err error) {
 	}
 	return list, nil
 }
+
+func SqlRows2Record(rows *sql.Rows) (list []Record, err error) {
+	row, err := rows2SliceMap(rows)
+	if err != nil {
+		return nil, err
+	}
+	for _, v := range row {
+		list = append(list, v.Data)
+	}
+	return list, nil
+}
+
+func SqlRows2SingleRecord(rows *sql.Rows) (record Record, err error) {
+	row, err := rows2SliceMap(rows)
+	if err != nil {
+		return nil, err
+	}
+	for _, v := range row {
+		return v.Data, nil
+	}
+	return nil, nil
+}
