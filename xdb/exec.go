@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/pkg/errors"
 )
@@ -54,7 +53,7 @@ func query(db *sql.DB, _sql string, args ...interface{}) (result []Row, err erro
 
 var needConvertPlaceholder = false
 
-// SetNeedConvertPlaceholder 设置是否需要将SQL语句中的?占位符按顺序替换为$1, $2, $3等
+// SetNeedConvertPlaceholder 设置是否需���将SQL语句中的?占位符按顺序替换为$1, $2, $3等
 func SetNeedConvertPlaceholder(b bool) {
 	needConvertPlaceholder = b
 }
@@ -112,7 +111,7 @@ func destination(columnTypes []*sql.ColumnType) func() []interface{} {
 			})
 		case "DATETIME", "DATE", "TIMESTAMP", "TIME", "TIMESTAMPTZ":
 			dest = append(dest, func() interface{} {
-				return new(time.Time)
+				return new(sql.NullTime)
 			})
 		case "DOUBLE", "FLOAT":
 			dest = append(dest, func() interface{} {
@@ -156,9 +155,16 @@ func rows2SliceMap(rows *sql.Rows) (list []Row, err error) {
 		row := new(Row)
 		row.Data = map[string]interface{}{}
 		for i := 0; i < length; i++ {
-			if val, ok := tmp[i].(*sql.NullString); ok {
-				row.Data[columns[i]] = val.String
-			} else {
+			switch v := tmp[i].(type) {
+			case *sql.NullString:
+				row.Data[columns[i]] = v.String
+			case *sql.NullTime:
+				if v.Valid {
+					row.Data[columns[i]] = v.Time
+				} else {
+					row.Data[columns[i]] = nil
+				}
+			default:
 				row.Data[columns[i]] = tmp[i]
 			}
 		}

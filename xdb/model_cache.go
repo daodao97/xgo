@@ -18,6 +18,14 @@ func (m *model) cacheKeyPrefix(id string) string {
 	return fmt.Sprintf("%s-%s-%s", m.connection, m.table, id)
 }
 
+func (m *model) FindById(id string) (Record, error) {
+	row := m.FindBy(id)
+	if row.Err != nil {
+		return nil, row.Err
+	}
+	return row.Data, nil
+}
+
 func (m *model) FindBy(id string) *Row {
 	if cache == nil {
 		return &Row{Err: errors.New("cache instance is nil")}
@@ -79,6 +87,14 @@ func (m *model) UpdateBy(id string, record Record) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func (m *model) FindByField(field string, val string) (Record, error) {
+	row := m.FindByKey(field, val)
+	if row.Err != nil {
+		return nil, row.Err
+	}
+	return row.Data, nil
 }
 
 func (m *model) FindByKey(key string, val string) *Row {

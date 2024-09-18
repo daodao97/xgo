@@ -65,6 +65,19 @@ func (r Record) GetTime(key string) *time.Time {
 	return v.(*time.Time)
 }
 
+func (r Record) GetTimeFormat(key string, format string) string {
+	v, ok := r[key]
+	if !ok {
+		return ""
+	}
+
+	t, ok := v.(time.Time)
+	if !ok {
+		return ""
+	}
+	return t.Format(format)
+}
+
 func (r Record) GetAny(key string) any {
 	v, ok := r[key]
 	if !ok {
@@ -117,8 +130,12 @@ type Model interface {
 	Delete(opt ...Option) (ok bool, err error)
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	Query(query string, args ...interface{}) (*sql.Rows, error)
+	//Deprecated: use FindById instead
 	FindBy(id string) *Row
+	//Deprecated: use FindByField instead
 	FindByKey(key string, val string) *Row
+	FindById(id string) (Record, error)
+	FindByField(field string, val string) (Record, error)
 	UpdateBy(id string, record Record) (bool, error)
 	Ctx(ctx context.Context) Model
 }
