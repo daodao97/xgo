@@ -15,7 +15,13 @@ func (t *Time) Output(row map[string]interface{}, fieldValue interface{}) (inter
 		t.Format = "2006-01-02 15:04:05"
 	}
 
-	value := fieldValue.(*time.Time)
+	if value, ok := fieldValue.(*time.Time); ok {
+		return value.Format(t.Format), nil
+	}
 
-	return value.Format(t.Format), nil
+	if value, ok := fieldValue.(time.Time); ok {
+		return value.Format(t.Format), nil
+	}
+
+	return fieldValue, nil
 }
