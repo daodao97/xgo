@@ -1,0 +1,87 @@
+{
+  "orderBy": {
+    "field": "id",
+    "mod": "desc"
+  },
+  "formItems": [
+    {
+      "field": "phone",
+      "label": "手机号"
+    },
+    {
+      "field": "status",
+      "label": "状态",
+      "type": "select",
+      "options": [
+        {
+          "value": 0,
+          "label": "禁用"
+        },
+        {
+          "value": 1,
+          "label": "启用"
+        }
+      ]
+    }
+  ],
+  "filter": [
+    {
+      "field": "id",
+      "label": "ID"
+    },
+    {
+      "field": "phone",
+      "label": "手机号"
+    },
+    {
+      "field": "status",
+      "label": "状态",
+      "type": "select",
+      "options": [
+        {
+          "value": 0,
+          "label": "禁用"
+        },
+        {
+          "value": 1,
+          "label": "启用"
+        }
+      ]
+    }
+  ],
+  "headers": [
+    {
+      "field": "id",
+      "label": "ID"
+    },
+    {
+      "field": "phone",
+      "label": "手机号"
+    },
+    {
+      "field": "status",
+      "label": "状态",
+      "type": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "禁用"
+        },
+        {
+          "value": 1,
+          "label": "启用"
+        }
+      ]
+    }
+  ],
+  "rowButton": [
+    {
+      "props": {
+        "type": "primary"
+      },
+      "target": "/user/{id}",
+      "text": "编辑",
+      "type": "jump"
+    }
+  ]
+}

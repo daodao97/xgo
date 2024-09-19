@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv, splitVendorChunkPlugin } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import copy from 'rollup-plugin-copy'
@@ -24,7 +24,6 @@ const plugins = [
     resolvers: [ElementPlusResolver()]
   }),
   svgLoader(),
-  splitVendorChunkPlugin(),
   _export ? visualizer({
     open: true,
     gzipSize: true,
@@ -35,7 +34,7 @@ const plugins = [
 const baseEnv = {
   'VITE_BASE_API': '/api',
   'VITE_BASE': '',
-  'VITE_SERVER_API': 'http://127.0.0.1:8787'
+  'VITE_SERVER_API': 'http://127.0.0.1:3003'
 }
 
 export default ({ mode }) => {
