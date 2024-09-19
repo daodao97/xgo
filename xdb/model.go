@@ -133,6 +133,7 @@ type Model interface {
 	Single(opt ...Option) (Record, error)
 	Count(opt ...Option) (count int64, err error)
 	Insert(record Record) (lastId int64, err error)
+	InsertBatch(records []Record) (lastId int64, err error)
 	Update(record Record, opt ...Option) (ok bool, err error)
 	InsertOrUpdate(record Record, updateFields ...string) (resp Record, affected int64, err error)
 	Delete(opt ...Option) (ok bool, err error)
@@ -397,6 +398,80 @@ func (m *model) Insert(record Record) (lastId int64, err error) {
 	}
 
 	return lastId, nil
+}
+
+func (m *model) InsertBatch(records []Record) (lastId int64, err error) {
+	if m.err != nil {
+		return 0, m.err
+	}
+
+	var kv []interface{}
+	defer dbLog(m.ctx, "InsertBatch", time.Now(), &err, &kv)
+
+	if len(records) == 0 {
+		return 0, errors.New("没有记录可插入")
+	}
+
+	// 使用第一条记录的字段作为基准
+	baseRecord := records[0]
+	fields := make([]string, 0, len(baseRecord))
+	for field := range baseRecord {
+		if field != m.primaryKey {
+			fields = append(fields, field)
+		}
+	}
+
+	var values []interface{}
+	placeholders := make([]string, 0, len(records))
+
+	for _, record := range records {
+		if len(record) != len(baseRecord) {
+			return 0, errors.New("所有记录的字段数量必须一致")
+		}
+
+		record, err = m.hookInput(record)
+		if err != nil {
+			return 0, err
+		}
+
+		if m.enableValidator {
+			for _, v := range m.columnValidator {
+				err = v(NewValidOpt(withRow(record), WithModel(m)))
+				if err != nil {
+					return 0, err
+				}
+			}
+		}
+
+		rowPlaceholders := make([]string, len(fields))
+		for i, field := range fields {
+			if val, ok := record[field]; ok {
+				values = append(values, val)
+				rowPlaceholders[i] = "?"
+			} else {
+				return 0, fmt.Errorf("record [%d] missing field: %s", i, field)
+			}
+		}
+		placeholders = append(placeholders, "("+strings.Join(rowPlaceholders, ",")+")")
+	}
+
+	if len(placeholders) != len(records) {
+		return 0, errors.New("placeholders length not equal to records length")
+	}
+
+	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES %s",
+		m.table,
+		strings.Join(fields, ","),
+		strings.Join(placeholders, ","))
+
+	kv = append(kv, "sql", query, "args", values)
+
+	result, err := exec(m.client, query, values...)
+	if err != nil {
+		return 0, err
+	}
+
+	return result.LastInsertId()
 }
 
 func (m *model) Update(record Record, opt ...Option) (ok bool, err error) {
