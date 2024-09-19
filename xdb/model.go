@@ -62,7 +62,15 @@ func (r Record) GetTime(key string) *time.Time {
 	if !ok {
 		return nil
 	}
-	return v.(*time.Time)
+	if value, ok := v.(*time.Time); ok {
+		return value
+	}
+
+	if value, ok := v.(time.Time); ok {
+		return &value
+	}
+
+	return nil
 }
 
 func (r Record) GetTimeFormat(key string, format string) string {
