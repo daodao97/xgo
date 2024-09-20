@@ -130,6 +130,7 @@ type Model interface {
 	//Deprecated: use Single instead
 	SelectOne(opt ...Option) *Row
 	Selects(opt ...Option) ([]Record, error)
+	Page(page int, size int, opt ...Option) (int64, []Record, error)
 	Single(opt ...Option) (Record, error)
 	Count(opt ...Option) (count int64, err error)
 	Insert(record Record) (lastId int64, err error)
@@ -302,6 +303,22 @@ func (m *model) Selects(opt ...Option) ([]Record, error) {
 	}
 
 	return records, nil
+}
+
+func (m *model) Page(page int, size int, opt ...Option) (int64, []Record, error) {
+	opt = append(opt, Limit(size), Offset((page-1)*size))
+
+	total, err := m.Count(opt...)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	records, err := m.Selects(opt...)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return total, records, nil
 }
 
 func (m *model) SelectOne(opt ...Option) *Row {
