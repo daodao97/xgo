@@ -389,8 +389,6 @@ func CollectRouteInfo(engine *gin.Engine) {
 	}
 }
 
-type Empty struct{}
-
 func RegisterAPI[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error)) gin.HandlerFunc {
 	wrappedHandler := HanderFunc(handler)
 
@@ -672,7 +670,7 @@ func parsePathParameters(path string) (string, []Parameter) {
 	return strings.Join(newParts, "/"), params
 }
 
-// 新增函数：根据路径生成标签
+// 根据路径生成标签
 func generateTags(path string) []string {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) > 0 {
