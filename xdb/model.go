@@ -7,132 +7,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/spf13/cast"
 
 	"github.com/daodao97/xgo/xlog"
-
-	"github.com/daodao97/xgo/xdb/interval/util"
 )
 
 var ErrNotFound = errors.New("record not found")
 
-type Record map[string]any
-
-func (r Record) Binding(dest any) error {
-	if !util.AllowType(dest, []string{"*struct", "**struct"}) {
-		return ErrRowBindingType
-	}
-
-	return util.Binding(r, dest)
-}
-
-func (r Record) Get(key string) (any, bool) {
-	v, ok := r[key]
-	return v, ok
-}
-
-func (r Record) GetString(key string) string {
-	v, ok := r[key]
-	if !ok {
-		return ""
-	}
-	return cast.ToString(v)
-}
-
-func (r Record) GetInt(key string) int {
-	v, ok := r[key]
-	if !ok {
-		return 0
-	}
-	return cast.ToInt(v)
-}
-
-func (r Record) GetArray(key string) []any {
-	v, ok := r[key]
-	if !ok {
-		return []any{}
-	}
-	return cast.ToSlice(v)
-}
-
-func (r Record) GetTime(key string) *time.Time {
-	v, ok := r[key]
-	if !ok {
-		return nil
-	}
-	if value, ok := v.(*time.Time); ok {
-		return value
-	}
-
-	if value, ok := v.(time.Time); ok {
-		return &value
-	}
-
-	return nil
-}
-
-func (r Record) GetTimeFormat(key string, format string) string {
-	v, ok := r[key]
-	if !ok {
-		return ""
-	}
-
-	t, ok := v.(time.Time)
-	if !ok {
-		return ""
-	}
-	return t.Format(format)
-}
-
-func (r Record) GetAny(key string) any {
-	v, ok := r[key]
-	if !ok {
-		return nil
-	}
-	return v
-}
-
-func (r Record) GetBool(key string) bool {
-	v, ok := r[key]
-	if !ok {
-		return false
-	}
-	return cast.ToBool(v)
-}
-
-func (r Record) GetFloat64(key string) float64 {
-	v, ok := r[key]
-	if !ok {
-		return 0
-	}
-	return cast.ToFloat64(v)
-}
-
-func (r Record) GetRecord(key string) Record {
-	v, ok := r[key]
-	if !ok {
-		return nil
-	}
-
-	var record Record
-
-	mapstructure.Decode(v, &record)
-
-	return record
-}
-
 type Model interface {
 	PrimaryKey() string
-	//Deprecated: use Selects instead
-	Select(opt ...Option) (rows *Rows)
-	//Deprecated: use Single instead
-	SelectOne(opt ...Option) *Row
-	Selects(opt ...Option) ([]Record, error)
-	Page(page int, size int, opt ...Option) (int64, []Record, error)
 	Single(opt ...Option) (Record, error)
 	Count(opt ...Option) (count int64, err error)
+	Selects(opt ...Option) ([]Record, error)
+	Page(page int, size int, opt ...Option) (int64, []Record, error)
 	Insert(record Record) (lastId int64, err error)
 	InsertBatch(records []Record) (lastId int64, err error)
 	Update(record Record, opt ...Option) (ok bool, err error)
@@ -140,14 +28,20 @@ type Model interface {
 	Delete(opt ...Option) (ok bool, err error)
 	Exec(query string, args ...any) (sql.Result, error)
 	Query(query string, args ...any) (*sql.Rows, error)
+	FindById(id string) (Record, error)
+	FindByField(field string, val string) (Record, error)
+	UpdateBy(id string, record Record) (bool, error)
+	Transaction(fn func(Model) error) error
+	Ctx(ctx context.Context) Model
+
+	//Deprecated: use Selects instead
+	Select(opt ...Option) (rows *Rows)
+	//Deprecated: use Single instead
+	SelectOne(opt ...Option) *Row
 	//Deprecated: use FindById instead
 	FindBy(id string) *Row
 	//Deprecated: use FindByField instead
 	FindByKey(key string, val string) *Row
-	FindById(id string) (Record, error)
-	FindByField(field string, val string) (Record, error)
-	UpdateBy(id string, record Record) (bool, error)
-	Ctx(ctx context.Context) Model
 }
 
 type model struct {
@@ -203,6 +97,26 @@ func New(table string, baseOpt ...With) Model {
 	}
 	m.enableValidator = true
 	return m
+}
+
+func (m *model) Transaction(fn func(Model) error) error {
+	tx, err := m.client.Begin()
+	if err != nil {
+		return err
+	}
+
+	err = fn(m)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (m *model) Ctx(ctx context.Context) Model {
@@ -396,6 +310,7 @@ func (m *model) Insert(record Record) (lastId int64, err error) {
 
 	if m.config.Driver == "postgres" {
 		_sql = _sql + " RETURNING " + m.primaryKey
+		_sql = convertPlaceholders(_sql)
 	}
 
 	kv = append(kv, "sql", _sql, "args", vs)
@@ -533,6 +448,10 @@ func (m *model) Update(record Record, opt ...Option) (ok bool, err error) {
 
 	_sql, args := UpdateBuilder(opt...)
 	kv = append(kv, "sql", _sql, "args", args)
+
+	if m.config.Driver == "postgres" {
+		_sql = convertPlaceholders(_sql)
+	}
 
 	result, err := exec(m.client, _sql, args...)
 	if err != nil {
@@ -680,6 +599,10 @@ func (m *model) Delete(opt ...Option) (ok bool, err error) {
 
 	_sql, args := DeleteBuilder(opt...)
 	kv = append(kv, "slq", _sql, "args", args)
+
+	if m.config.Driver == "postgres" {
+		_sql = convertPlaceholders(_sql)
+	}
 
 	result, err := exec(m.client, _sql, args...)
 	if err != nil {

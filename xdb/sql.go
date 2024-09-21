@@ -1,116 +1,14 @@
 package xdb
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
-
-	"github.com/pkg/errors"
-
-	"github.com/spf13/cast"
-
-	"github.com/daodao97/xgo/xdb/interval/util"
 )
-
-var ErrRowBindingType = errors.New("binding dest type must be *struct **struct")
-var ErrRowsBindingType = errors.New("binding dest type must be *[]struct, *[]*struct")
 
 const selectMod = "select %s from %s"
 const insertMod = "insert into %s (%s) values (%s)"
 const updateMod = "update %s set %s"
 const deleteMod = "delete from %s"
-
-type Row struct {
-	Data map[string]any
-	Err  error
-}
-
-func (r *Row) MarshalJSON() ([]byte, error) {
-	return json.Marshal(r.Data)
-}
-
-func (r *Row) Binding(dest any) error {
-	if r.Err != nil {
-		return r.Err
-	}
-	if !util.AllowType(dest, []string{"*struct", "**struct"}) {
-		return ErrRowBindingType
-	}
-
-	return util.Binding(r.Data, dest)
-}
-
-func (r *Row) Get(key string) (any, bool) {
-	v, ok := r.Data[key]
-	return v, ok
-}
-
-func (r *Row) GetString(key string) string {
-	v, ok := r.Data[key]
-	if !ok {
-		return ""
-	}
-	return cast.ToString(v)
-}
-
-func (r *Row) GetInt(key string) int {
-	v, ok := r.Data[key]
-	if !ok {
-		return 0
-	}
-	return cast.ToInt(v)
-}
-
-func (r *Row) GetArray(key string) []any {
-	v, ok := r.Data[key]
-	if !ok {
-		return []any{}
-	}
-	return cast.ToSlice(v)
-}
-
-func (r *Row) GetTime(key string) *time.Time {
-	v, ok := r.Data[key]
-	if !ok {
-		return nil
-	}
-	return v.(*time.Time)
-}
-
-func (r *Row) GetMap(key string) map[string]any {
-	v, ok := r.Data[key]
-	if !ok {
-		return nil
-	}
-	return *v.(*map[string]any)
-}
-
-func (r *Row) GetAny(key string) any {
-	v, ok := r.Data[key]
-	if !ok {
-		return nil
-	}
-	return v
-}
-
-type Rows struct {
-	List []Row
-	Err  error
-}
-
-func (r *Rows) Binding(dest any) error {
-	if !util.AllowType(dest, []string{"*[]struct", "*[]*struct"}) {
-		return ErrRowsBindingType
-	}
-
-	var source []map[string]any
-	for _, v := range r.List {
-		source = append(source, v.Data)
-	}
-
-	return util.Binding(source, dest)
-}
 
 type Option = func(opts *Options)
 
@@ -582,7 +480,7 @@ func SelectBuilder(opts ...Option) (sql string, args []any) {
 		args = append(args, _opts.limit, _opts.offset)
 	}
 
-	return convertPlaceholders(sql), args
+	return sql, args
 }
 
 func getTable(opt *Options) string {
@@ -603,7 +501,7 @@ func InsertBuilder(opts ...Option) (sql string, args []any) {
 	}
 	sql = fmt.Sprintf(insertMod, getTable(_opts), strings.Join(_opts.field, ", "), strings.Join(_val, ","))
 	args = _opts.value
-	return convertPlaceholders(sql), args
+	return sql, args
 }
 
 func HaveFieldInWhere(field string, opts ...Option) (any, bool) {
@@ -635,7 +533,7 @@ func UpdateBuilder(opts ...Option) (sql string, args []any) {
 		sql = sql + " where " + _where
 		args = append(args, _args...)
 	}
-	return convertPlaceholders(sql), args
+	return sql, args
 }
 
 func DeleteBuilder(opts ...Option) (sql string, args []any) {
@@ -649,5 +547,5 @@ func DeleteBuilder(opts ...Option) (sql string, args []any) {
 		sql = sql + " where " + _where
 		args = append(args, _args...)
 	}
-	return convertPlaceholders(sql), args
+	return sql, args
 }
