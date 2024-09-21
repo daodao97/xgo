@@ -12,7 +12,7 @@ type Valid = func(v *ValidInfo) error
 
 type ValidInfo struct {
 	Field string
-	Row   map[string]interface{}
+	Row   map[string]any
 	Model Model
 	Label string
 	Msg   string
@@ -63,7 +63,7 @@ func WithLabel(label string) ValidOpt {
 	}
 }
 
-func withRow(row map[string]interface{}) ValidOpt {
+func withRow(row map[string]any) ValidOpt {
 	return func(v *ValidInfo) {
 		v.Row = row
 	}

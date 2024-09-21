@@ -23,15 +23,15 @@ func init() {
 
 var ErrParamsType = errors.New("param record type must be map[string]interface, *map[string]interface, struct, *struct")
 
-func DecodeToMap(s interface{}, saveZero bool) (map[string]interface{}, error) {
-	tmp := map[string]interface{}{}
+func DecodeToMap(s any, saveZero bool) (map[string]any, error) {
+	tmp := map[string]any{}
 	t := reflect.TypeOf(s)
 	if isMapStrInterface(t) {
-		return s.(map[string]interface{}), nil
+		return s.(map[string]any), nil
 	}
 
 	if isPtrMapStrInterface(t) {
-		return *s.(*map[string]interface{}), nil
+		return *s.(*map[string]any), nil
 	}
 
 	v := reflect.Indirect(reflect.ValueOf(s))
@@ -52,7 +52,7 @@ func DecodeToMap(s interface{}, saveZero bool) (map[string]interface{}, error) {
 	return nil, ErrParamsType
 }
 
-func Binding(from interface{}, to interface{}) error {
+func Binding(from any, to any) error {
 	switch from := from.(type) {
 	case []byte:
 		return jsoniter.Unmarshal(from, to)
@@ -80,7 +80,7 @@ func Binding(from interface{}, to interface{}) error {
 	}
 }
 
-func Decoder(source, dest interface{}) error {
+func Decoder(source, dest any) error {
 	_decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		Result:           dest,
 		WeaklyTypedInput: true,

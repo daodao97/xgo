@@ -19,7 +19,7 @@ func (l ExampleStructSlice) Value() (driver.Value, error) {
 	return string(bytes), err
 }
 
-func (l *ExampleStructSlice) Scan(input interface{}) error {
+func (l *ExampleStructSlice) Scan(input any) error {
 	switch value := input.(type) {
 	case string:
 		return json.Unmarshal([]byte(value), l)

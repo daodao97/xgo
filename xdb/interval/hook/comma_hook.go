@@ -9,7 +9,7 @@ import (
 
 type CommaSeparatedInt struct{}
 
-func (CommaSeparatedInt) Input(row map[string]interface{}, fieldValue interface{}) (interface{}, error) {
+func (CommaSeparatedInt) Input(row map[string]any, fieldValue any) (any, error) {
 	if fieldValue == nil {
 		return "", nil
 	}
@@ -23,7 +23,7 @@ func (CommaSeparatedInt) Input(row map[string]interface{}, fieldValue interface{
 	return strings.Join(strSlice, ","), nil
 }
 
-func (CommaSeparatedInt) Output(row map[string]interface{}, fieldValue interface{}) (interface{}, error) {
+func (CommaSeparatedInt) Output(row map[string]any, fieldValue any) (any, error) {
 	parts := strings.Split(cast.ToString(fieldValue), ",")
 	var _parts []int
 	for _, v := range parts {
@@ -40,7 +40,7 @@ type CommaSeparatedString struct {
 	CommaSeparatedInt
 }
 
-func (CommaSeparatedString) Input(row map[string]interface{}, fieldValue interface{}) (interface{}, error) {
+func (CommaSeparatedString) Input(row map[string]any, fieldValue any) (any, error) {
 	tmp, err := cast.ToStringSliceE(fieldValue)
 	if err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func (CommaSeparatedString) Input(row map[string]interface{}, fieldValue interfa
 	return strings.Join(tmp, ","), nil
 }
 
-func (CommaSeparatedString) Output(row map[string]interface{}, fieldValue interface{}) (interface{}, error) {
+func (CommaSeparatedString) Output(row map[string]any, fieldValue any) (any, error) {
 	var tmp []string
 	for _, i := range strings.Split(cast.ToString(fieldValue), ",") {
 		if i == "" {

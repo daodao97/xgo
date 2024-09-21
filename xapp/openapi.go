@@ -174,7 +174,7 @@ type Schema struct {
 	Description          string            `json:"description,omitempty"`
 	Required             []string          `json:"required,omitempty"`
 	Format               string            `json:"format,omitempty"`
-	Enum                 []interface{}     `json:"enum,omitempty"`
+	Enum                 []any             `json:"enum,omitempty"`
 	Minimum              *float64          `json:"minimum,omitempty"`
 	Maximum              *float64          `json:"maximum,omitempty"`
 	MinLength            *int              `json:"minLength,omitempty"`

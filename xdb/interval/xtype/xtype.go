@@ -39,7 +39,7 @@ func (t Type) String() string {
 	}
 }
 
-//Go's integer types are: uint8 , uint16 , uint32 , uint64 , int8 , int16 , int32 and int64. 8, 16, 32 and 64 tell us how many bits each of the types use. uint means “unsigned integer” while int means “signed integer”. Unsigned integers only contain positive numbers (or zero).
+// Go's integer types are: uint8 , uint16 , uint32 , uint64 , int8 , int16 , int32 and int64. 8, 16, 32 and 64 tell us how many bits each of the types use. uint means “unsigned integer” while int means “signed integer”. Unsigned integers only contain positive numbers (or zero).
 var _numberTypes = map[string]bool{
 	"uint8":   true,
 	"uint16":  true,
@@ -56,7 +56,7 @@ var _numberTypes = map[string]bool{
 }
 
 // GetType get xtype.Type of given object
-func GetType(obj interface{}) Type {
+func GetType(obj any) Type {
 	if obj == nil {
 		return NULL
 	}
@@ -88,7 +88,7 @@ func GetType(obj interface{}) Type {
 // bool: true => 1.0 false => 0.0
 // string: empty => 0, otherwise parse float
 // nil && otherwise: 0.0
-func Float(obj interface{}) float64 {
+func Float(obj any) float64 {
 	if obj == nil {
 		return 0.0
 	}
@@ -146,7 +146,7 @@ func Float(obj interface{}) float64 {
 // bool: true => 1, false => 0,
 // string: empty => 0, otherwise parse int
 // nil & otherwise : 0
-func Int(obj interface{}) int64 {
+func Int(obj any) int64 {
 	if obj == nil {
 		return 0
 	}
@@ -204,7 +204,7 @@ func Int(obj interface{}) int64 {
 // bool: true => 1, false => 0,
 // string: empty => 0, otherwise parse int
 // nil & otherwise : 0
-func Uint(obj interface{}) uint64 {
+func Uint(obj any) uint64 {
 	if obj == nil {
 		return 0
 	}
@@ -262,7 +262,7 @@ func Uint(obj interface{}) uint64 {
 // bool : true => "1", false => ""
 // number : number format
 // nil & otherwise : ""
-func String(obj interface{}) string {
+func String(obj any) string {
 	if obj == nil {
 		return ""
 	}
@@ -310,7 +310,7 @@ func String(obj interface{}) string {
 
 // Bytes try to get []byte value of given object
 // see String()
-func Bytes(obj interface{}) []byte {
+func Bytes(obj any) []byte {
 	return []byte(String(obj))
 }
 
@@ -322,7 +322,7 @@ const FALSE_STRINGS = "no,false,off,0,"
 // string: ("", "false", "off", "no", "0") => false (case insensitive), otherwise => true
 // nil: false
 // otherwise: true
-func Bool(obj interface{}) bool {
+func Bool(obj any) bool {
 	if obj == nil {
 		return false
 	}

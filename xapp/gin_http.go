@@ -170,7 +170,7 @@ func getDefaultSetters(t reflect.Type) []defaultSetter {
 	return setters
 }
 
-func setDefaultValues(obj interface{}) {
+func setDefaultValues(obj any) {
 	v := reflect.ValueOf(obj)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()

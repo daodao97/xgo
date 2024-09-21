@@ -76,7 +76,7 @@ func auth(handler http.Handler) http.Handler {
 
 		_, err := xjwt.VerifyHMacToken(r.Header.Get("X-Token"), _jwtConf.Secret)
 		if err != nil {
-			xhttp.ResponseJson(w, map[string]interface{}{
+			xhttp.ResponseJson(w, map[string]any{
 				"code": 401,
 				"msg":  "Unauthorized" + err.Error(),
 			})

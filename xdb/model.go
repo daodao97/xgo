@@ -18,9 +18,9 @@ import (
 
 var ErrNotFound = errors.New("record not found")
 
-type Record map[string]interface{}
+type Record map[string]any
 
-func (r Record) Binding(dest interface{}) error {
+func (r Record) Binding(dest any) error {
 	if !util.AllowType(dest, []string{"*struct", "**struct"}) {
 		return ErrRowBindingType
 	}
@@ -28,7 +28,7 @@ func (r Record) Binding(dest interface{}) error {
 	return util.Binding(r, dest)
 }
 
-func (r Record) Get(key string) (interface{}, bool) {
+func (r Record) Get(key string) (any, bool) {
 	v, ok := r[key]
 	return v, ok
 }
@@ -138,8 +138,8 @@ type Model interface {
 	Update(record Record, opt ...Option) (ok bool, err error)
 	InsertOrUpdate(record Record, updateFields ...string) (resp Record, affected int64, err error)
 	Delete(opt ...Option) (ok bool, err error)
-	Exec(query string, args ...interface{}) (sql.Result, error)
-	Query(query string, args ...interface{}) (*sql.Rows, error)
+	Exec(query string, args ...any) (sql.Result, error)
+	Query(query string, args ...any) (*sql.Rows, error)
 	//Deprecated: use FindById instead
 	FindBy(id string) *Row
 	//Deprecated: use FindByField instead
@@ -215,7 +215,7 @@ func (m *model) PrimaryKey() string {
 }
 
 func (m *model) Select(opt ...Option) (rows *Rows) {
-	var kv []interface{}
+	var kv []any
 	var err error
 	defer dbLog(m.ctx, "Select", time.Now(), &err, &kv)
 
@@ -364,7 +364,7 @@ func (m *model) Insert(record Record) (lastId int64, err error) {
 		return 0, m.err
 	}
 
-	var kv []interface{}
+	var kv []any
 	defer dbLog(m.ctx, "Insert", time.Now(), &err, &kv)
 
 	_record := record
@@ -422,7 +422,7 @@ func (m *model) InsertBatch(records []Record) (lastId int64, err error) {
 		return 0, m.err
 	}
 
-	var kv []interface{}
+	var kv []any
 	defer dbLog(m.ctx, "InsertBatch", time.Now(), &err, &kv)
 
 	if len(records) == 0 {
@@ -438,7 +438,7 @@ func (m *model) InsertBatch(records []Record) (lastId int64, err error) {
 		}
 	}
 
-	var values []interface{}
+	var values []any
 	placeholders := make([]string, 0, len(records))
 
 	for _, record := range records {
@@ -496,7 +496,7 @@ func (m *model) Update(record Record, opt ...Option) (ok bool, err error) {
 		return false, m.err
 	}
 
-	var kv []interface{}
+	var kv []any
 	defer dbLog(m.ctx, "Update", time.Now(), &err, &kv)
 
 	_record := record
@@ -581,7 +581,7 @@ func (m *model) InsertOrUpdate(record Record, updateFields ...string) (resp Reco
 		return nil, 0, m.err
 	}
 
-	var kv []interface{}
+	var kv []any
 	defer dbLog(m.ctx, "InsertOrUpdate", time.Now(), &err, &kv)
 
 	if len(record) == 0 {
@@ -590,7 +590,7 @@ func (m *model) InsertOrUpdate(record Record, updateFields ...string) (resp Reco
 
 	// 准备插入的字段和值
 	var fields []string
-	var values []interface{}
+	var values []any
 	for field, value := range record {
 		fields = append(fields, field)
 		values = append(values, value)
@@ -672,10 +672,10 @@ func (m *model) Delete(opt ...Option) (ok bool, err error) {
 		defer func() {
 			m.enableValidator = true
 		}()
-		return m.Update(map[string]interface{}{m.fakeDelKey: 1}, opt...)
+		return m.Update(map[string]any{m.fakeDelKey: 1}, opt...)
 	}
 
-	var kv []interface{}
+	var kv []any
 	defer dbLog(m.ctx, "Delete", time.Now(), &err, &kv)
 
 	_sql, args := DeleteBuilder(opt...)
@@ -692,15 +692,15 @@ func (m *model) Delete(opt ...Option) (ok bool, err error) {
 	return effect > int64(0), nil
 }
 
-func (m *model) Exec(query string, args ...interface{}) (sql.Result, error) {
+func (m *model) Exec(query string, args ...any) (sql.Result, error) {
 	return m.client.Exec(query, args...)
 }
 
-func (m *model) Query(query string, args ...interface{}) (*sql.Rows, error) {
+func (m *model) Query(query string, args ...any) (*sql.Rows, error) {
 	return m.client.Query(query, args...)
 }
 
-func (m *model) hookInput(record map[string]interface{}) (map[string]interface{}, error) {
+func (m *model) hookInput(record map[string]any) (map[string]any, error) {
 	for k, v := range m.columnHook {
 		for field, val := range record {
 			if k == field {
@@ -715,7 +715,7 @@ func (m *model) hookInput(record map[string]interface{}) (map[string]interface{}
 	return record, nil
 }
 
-func (m *model) recordToKV(record map[string]interface{}) (ks []string, vs []interface{}) {
+func (m *model) recordToKV(record map[string]any) (ks []string, vs []any) {
 	for k, v := range record {
 		ks = append(ks, k)
 		vs = append(vs, v)

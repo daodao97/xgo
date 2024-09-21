@@ -5,8 +5,8 @@ import (
 )
 
 type HookData interface {
-	Input(row map[string]interface{}, fieldValue interface{}) (interface{}, error)
-	Output(row map[string]interface{}, fieldValue interface{}) (interface{}, error)
+	Input(row map[string]any, fieldValue any) (any, error)
+	Output(row map[string]any, fieldValue any) (any, error)
 }
 
 type Hook = func() (string, HookData)

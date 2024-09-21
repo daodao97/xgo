@@ -47,7 +47,7 @@ func Init(conns map[string]*Config) error {
 }
 
 func Close() {
-	pool.Range(func(key, value interface{}) bool {
+	pool.Range(func(key, value any) bool {
 		db := value.(*sql.DB)
 		_ = db.Close()
 		return true

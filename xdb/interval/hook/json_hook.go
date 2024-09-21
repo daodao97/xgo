@@ -11,7 +11,7 @@ import (
 
 type Json struct{}
 
-func (Json) Input(row map[string]interface{}, fieldValue interface{}) (interface{}, error) {
+func (Json) Input(row map[string]any, fieldValue any) (any, error) {
 	if fieldValue == nil {
 		return nil, nil
 	}
@@ -22,7 +22,7 @@ func (Json) Input(row map[string]interface{}, fieldValue interface{}) (interface
 	return string(bt), err
 }
 
-func (Json) Output(row map[string]interface{}, fieldValue interface{}) (interface{}, error) {
+func (Json) Output(row map[string]any, fieldValue any) (any, error) {
 	str := cast.ToString(fieldValue)
 	if str == "" {
 		return nil, nil
@@ -31,12 +31,12 @@ func (Json) Output(row map[string]interface{}, fieldValue interface{}) (interfac
 	if err != nil {
 		return nil, err
 	}
-	tmp1 := new([]interface{})
+	tmp1 := new([]any)
 	err1 := json.Unmarshal([]byte(str), tmp1)
 	if err1 == nil {
 		return tmp1, nil
 	}
-	tmp2 := new(map[string]interface{})
+	tmp2 := new(map[string]any)
 	err2 := json.Unmarshal([]byte(str), tmp2)
 	if err2 == nil {
 		return tmp2, nil
@@ -51,9 +51,9 @@ type Array struct {
 	Json
 }
 
-func (Array) Output(row map[string]interface{}, fieldValue interface{}) (interface{}, error) {
+func (Array) Output(row map[string]any, fieldValue any) (any, error) {
 	str := cast.ToString(fieldValue)
-	tmp1 := new([]interface{})
+	tmp1 := new([]any)
 	if str == "" {
 		return tmp1, nil
 	}
@@ -75,9 +75,9 @@ type Object struct {
 	Json
 }
 
-func (Object) Output(row map[string]interface{}, fieldValue interface{}) (interface{}, error) {
+func (Object) Output(row map[string]any, fieldValue any) (any, error) {
 	str := cast.ToString(fieldValue)
-	tmp2 := new(map[string]interface{})
+	tmp2 := new(map[string]any)
 	if str == "" {
 		return tmp2, nil
 	}

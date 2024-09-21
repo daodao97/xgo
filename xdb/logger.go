@@ -9,7 +9,7 @@ import (
 	"github.com/daodao97/xgo/xlog"
 )
 
-func Info(msg string, kv ...interface{}) {
+func Info(msg string, kv ...any) {
 	var _log []any
 	for i := 0; i < len(kv); i++ {
 		if i%2 == 0 {
@@ -21,11 +21,11 @@ func Info(msg string, kv ...interface{}) {
 	xlog.Debug(msg, _log...)
 }
 
-func Error(msg string, kv ...interface{}) {
+func Error(msg string, kv ...any) {
 	xlog.Error(msg, kv...)
 }
 
-func dbLog(ctx context.Context, prefix string, start time.Time, err *error, kv *[]interface{}) {
+func dbLog(ctx context.Context, prefix string, start time.Time, err *error, kv *[]any) {
 	tc := time.Since(start)
 
 	_log := []any{

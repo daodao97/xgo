@@ -22,7 +22,7 @@ var typeChecker = map[string]func(t reflect.Type) bool{
 	"*map[string]interface": isPtrMapStrInterface,
 }
 
-func AllowType(v interface{}, types []string) (ok bool) {
+func AllowType(v any, types []string) (ok bool) {
 	ty := reflect.TypeOf(v)
 	for _, t := range types {
 		if ok {

@@ -22,7 +22,7 @@ const updateMod = "update %s set %s"
 const deleteMod = "delete from %s"
 
 type Row struct {
-	Data map[string]interface{}
+	Data map[string]any
 	Err  error
 }
 
@@ -30,7 +30,7 @@ func (r *Row) MarshalJSON() ([]byte, error) {
 	return json.Marshal(r.Data)
 }
 
-func (r *Row) Binding(dest interface{}) error {
+func (r *Row) Binding(dest any) error {
 	if r.Err != nil {
 		return r.Err
 	}
@@ -41,7 +41,7 @@ func (r *Row) Binding(dest interface{}) error {
 	return util.Binding(r.Data, dest)
 }
 
-func (r *Row) Get(key string) (interface{}, bool) {
+func (r *Row) Get(key string) (any, bool) {
 	v, ok := r.Data[key]
 	return v, ok
 }
@@ -99,12 +99,12 @@ type Rows struct {
 	Err  error
 }
 
-func (r *Rows) Binding(dest interface{}) error {
+func (r *Rows) Binding(dest any) error {
 	if !util.AllowType(dest, []string{"*[]struct", "*[]*struct"}) {
 		return ErrRowsBindingType
 	}
 
-	var source []map[string]interface{}
+	var source []map[string]any
 	for _, v := range r.List {
 		source = append(source, v.Data)
 	}
@@ -123,7 +123,7 @@ type Options struct {
 	groupBy  string
 	limit    int
 	offset   int
-	value    []interface{}
+	value    []any
 }
 
 func table(table string) Option {
@@ -194,7 +194,7 @@ func AggregateMax(name string) Option {
 	return Field("max(" + name + ") as aggregate")
 }
 
-func Value(val ...interface{}) Option {
+func Value(val ...any) Option {
 	return func(opts *Options) {
 		opts.value = val
 	}
@@ -203,12 +203,12 @@ func Value(val ...interface{}) Option {
 type where struct {
 	field    string
 	operator string
-	value    interface{}
+	value    any
 	logic    string
 	sub      []where
 }
 
-func Where(field, operator string, value interface{}) Option {
+func Where(field, operator string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -219,7 +219,7 @@ func Where(field, operator string, value interface{}) Option {
 	}
 }
 
-func WhereEq(field string, value interface{}) Option {
+func WhereEq(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -229,7 +229,7 @@ func WhereEq(field string, value interface{}) Option {
 	}
 }
 
-func WhereNotEq(field string, value interface{}) Option {
+func WhereNotEq(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -239,7 +239,7 @@ func WhereNotEq(field string, value interface{}) Option {
 	}
 }
 
-func WhereGt(field string, value interface{}) Option {
+func WhereGt(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -249,7 +249,7 @@ func WhereGt(field string, value interface{}) Option {
 	}
 }
 
-func WhereGe(field string, value interface{}) Option {
+func WhereGe(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -259,7 +259,7 @@ func WhereGe(field string, value interface{}) Option {
 	}
 }
 
-func WhereLt(field string, value interface{}) Option {
+func WhereLt(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -269,7 +269,7 @@ func WhereLt(field string, value interface{}) Option {
 	}
 }
 
-func WhereLe(field string, value interface{}) Option {
+func WhereLe(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -279,7 +279,7 @@ func WhereLe(field string, value interface{}) Option {
 	}
 }
 
-func WhereIn(field string, value []interface{}) Option {
+func WhereIn(field string, value []any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -289,7 +289,7 @@ func WhereIn(field string, value []interface{}) Option {
 	}
 }
 
-func WhereNotIn(field string, value []interface{}) Option {
+func WhereNotIn(field string, value []any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -299,7 +299,7 @@ func WhereNotIn(field string, value []interface{}) Option {
 	}
 }
 
-func WhereOr(field, operator string, value interface{}) Option {
+func WhereOr(field, operator string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -310,7 +310,7 @@ func WhereOr(field, operator string, value interface{}) Option {
 	}
 }
 
-func WhereOrEq(field string, value interface{}) Option {
+func WhereOrEq(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -321,7 +321,7 @@ func WhereOrEq(field string, value interface{}) Option {
 	}
 }
 
-func WhereOrNotEq(field string, value interface{}) Option {
+func WhereOrNotEq(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -332,7 +332,7 @@ func WhereOrNotEq(field string, value interface{}) Option {
 	}
 }
 
-func WhereOrGt(field string, value interface{}) Option {
+func WhereOrGt(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -343,7 +343,7 @@ func WhereOrGt(field string, value interface{}) Option {
 	}
 }
 
-func WhereOrGe(field string, value interface{}) Option {
+func WhereOrGe(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -354,7 +354,7 @@ func WhereOrGe(field string, value interface{}) Option {
 	}
 }
 
-func WhereOrLt(field string, value interface{}) Option {
+func WhereOrLt(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -365,7 +365,7 @@ func WhereOrLt(field string, value interface{}) Option {
 	}
 }
 
-func WhereOrLe(field string, value interface{}) Option {
+func WhereOrLe(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -376,7 +376,7 @@ func WhereOrLe(field string, value interface{}) Option {
 	}
 }
 
-func WhereOrIn(field string, value []interface{}) Option {
+func WhereOrIn(field string, value []any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -387,7 +387,7 @@ func WhereOrIn(field string, value []interface{}) Option {
 	}
 }
 
-func WhereOrNotIn(field string, value []interface{}) Option {
+func WhereOrNotIn(field string, value []any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -424,7 +424,7 @@ func WhereOrGroup(opts ...Option) Option {
 	}
 }
 
-func WhereLike(field string, value interface{}) Option {
+func WhereLike(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -434,7 +434,7 @@ func WhereLike(field string, value interface{}) Option {
 	}
 }
 
-func WhereOrLike(field string, value interface{}) Option {
+func WhereOrLike(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -445,7 +445,7 @@ func WhereOrLike(field string, value interface{}) Option {
 	}
 }
 
-func WhereOrNotLike(field string, value interface{}) Option {
+func WhereOrNotLike(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -455,7 +455,7 @@ func WhereOrNotLike(field string, value interface{}) Option {
 	}
 }
 
-func WhereBetween(field string, value interface{}) Option {
+func WhereBetween(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -465,7 +465,7 @@ func WhereBetween(field string, value interface{}) Option {
 	}
 }
 
-func WhereFindInSet(field string, value interface{}) Option {
+func WhereFindInSet(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -475,7 +475,7 @@ func WhereFindInSet(field string, value interface{}) Option {
 	}
 }
 
-func WhereOrFindInSet(field string, value interface{}) Option {
+func WhereOrFindInSet(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -504,7 +504,7 @@ func GroupBy(field string) Option {
 	}
 }
 
-func whereBuilder(condition []where) (sql string, args []interface{}) {
+func whereBuilder(condition []where) (sql string, args []any) {
 	if len(condition) == 0 {
 		return "", nil
 	}
@@ -521,7 +521,7 @@ func whereBuilder(condition []where) (sql string, args []interface{}) {
 		if v.field != "" {
 			switch v.operator {
 			case "in", "not in":
-				val := v.value.([]interface{})
+				val := v.value.([]any)
 				var placeholder []string
 				for range val {
 					placeholder = append(placeholder, "?")
@@ -529,7 +529,7 @@ func whereBuilder(condition []where) (sql string, args []interface{}) {
 				tokens = append(tokens, fmt.Sprintf("%s %s (%s)", v.field, v.operator, strings.Join(placeholder, ",")))
 				args = append(args, val...)
 			case "between":
-				val := v.value.([]interface{})
+				val := v.value.([]any)
 				tokens = append(tokens, fmt.Sprintf("%s %s ? and ?", v.field, v.operator))
 				args = append(args, val...)
 			case "find_in_set":
@@ -550,7 +550,7 @@ func whereBuilder(condition []where) (sql string, args []interface{}) {
 	return strings.Join(tokens, " "), args
 }
 
-func SelectBuilder(opts ...Option) (sql string, args []interface{}) {
+func SelectBuilder(opts ...Option) (sql string, args []any) {
 	_opts := &Options{}
 	for _, v := range opts {
 		v(_opts)
@@ -592,7 +592,7 @@ func getTable(opt *Options) string {
 	return opt.database + "." + opt.table
 }
 
-func InsertBuilder(opts ...Option) (sql string, args []interface{}) {
+func InsertBuilder(opts ...Option) (sql string, args []any) {
 	_opts := &Options{}
 	for _, v := range opts {
 		v(_opts)
@@ -619,7 +619,7 @@ func HaveFieldInWhere(field string, opts ...Option) (any, bool) {
 	return nil, false
 }
 
-func UpdateBuilder(opts ...Option) (sql string, args []interface{}) {
+func UpdateBuilder(opts ...Option) (sql string, args []any) {
 	_opts := &Options{}
 	for _, v := range opts {
 		v(_opts)
@@ -638,7 +638,7 @@ func UpdateBuilder(opts ...Option) (sql string, args []interface{}) {
 	return convertPlaceholders(sql), args
 }
 
-func DeleteBuilder(opts ...Option) (sql string, args []interface{}) {
+func DeleteBuilder(opts ...Option) (sql string, args []any) {
 	_opts := &Options{}
 	for _, v := range opts {
 		v(_opts)

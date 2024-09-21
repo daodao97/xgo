@@ -43,7 +43,7 @@ func (m *model) FindBy(id string) *Row {
 		return &Row{Err: err}
 	}
 	if c != "" {
-		var result map[string]interface{}
+		var result map[string]any
 		err = json.Unmarshal([]byte(c), &result)
 		if err != nil {
 			return &Row{Err: err}

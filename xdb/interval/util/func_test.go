@@ -34,17 +34,17 @@ func Test_allowTypes(t *testing.T) {
 
 	assert.Equal(t, true, AllowType(b1, []string{"*[]*struct"}))
 
-	c := map[string]interface{}{
+	c := map[string]any{
 		"a": 1,
 	}
 	assert.Equal(t, true, AllowType(c, []string{"map[string]interface"}))
 
-	d := &map[string]interface{}{
+	d := &map[string]any{
 		"a": 1,
 	}
 	assert.Equal(t, true, AllowType(d, []string{"*map[string]interface"}))
 
-	d1 := &map[interface{}]interface{}{
+	d1 := &map[any]any{
 		"a": 1,
 	}
 	assert.Equal(t, false, AllowType(d1, []string{"*map[string]interface"}))
@@ -79,7 +79,7 @@ func Test_Decoder(t *testing.T) {
 		T  time.Time `json:"t"`
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"f_1": [][]int{{1}, {2}},
 		"t":   time.Now(),
 	}

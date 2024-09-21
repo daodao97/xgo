@@ -6,8 +6,8 @@ import (
 )
 
 type SelectOption struct {
-	Value interface{} `json:"value"`
-	Label string      `json:"label"`
+	Value any    `json:"value"`
+	Label string `json:"label"`
 }
 
 type Filter struct {
@@ -47,13 +47,13 @@ func (h *Header) UnmarshalJSON(data []byte) error {
 }
 
 type Button struct {
-	Text      string                 `json:"text"`
-	Target    string                 `json:"target"`
-	Tips      string                 `json:"tips,omitempty"`
-	Type      string                 `json:"type"`
-	Props     map[string]interface{} `json:"props,omitempty"`
-	Extra     map[string]interface{} `json:"extra,omitempty"`
-	SubButton []Button               `json:"subButton,omitempty"`
+	Text      string         `json:"text"`
+	Target    string         `json:"target"`
+	Tips      string         `json:"tips,omitempty"`
+	Type      string         `json:"type"`
+	Props     map[string]any `json:"props,omitempty"`
+	Extra     map[string]any `json:"extra,omitempty"`
+	SubButton []Button       `json:"subButton,omitempty"`
 }
 
 type FormItems struct {
@@ -78,17 +78,17 @@ type Orderby struct {
 }
 
 type Tab struct {
-	Value    interface{}
+	Value    any
 	Label    string
 	Field    string
 	Operator string
 }
 
 type baseWhere struct {
-	Field    string      `json:"field"`
-	Operator string      `json:"operator"`
-	Value    interface{} `json:"value"`
-	Logic    string      `json:"logic"`
+	Field    string `json:"field"`
+	Operator string `json:"operator"`
+	Value    any    `json:"value"`
+	Logic    string `json:"logic"`
 }
 
 type Schema struct {

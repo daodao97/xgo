@@ -17,7 +17,7 @@ func GenHMacToken(payload jwt.MapClaims, secret string) (string, error) {
 }
 
 func VerifyHMacToken(tokenStr, secret string) (jwt.MapClaims, error) {
-	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}

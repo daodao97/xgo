@@ -9,7 +9,7 @@ import (
 )
 
 // 一般用Prepared Statements和Exec()完成INSERT, UPDATE, DELETE操作
-func exec(db *sql.DB, _sql string, args ...interface{}) (res sql.Result, err error) {
+func exec(db *sql.DB, _sql string, args ...any) (res sql.Result, err error) {
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ func exec(db *sql.DB, _sql string, args ...interface{}) (res sql.Result, err err
 	return res, nil
 }
 
-func query(db *sql.DB, _sql string, args ...interface{}) (result []Row, err error) {
+func query(db *sql.DB, _sql string, args ...any) (result []Row, err error) {
 	stmt, err := db.Prepare(_sql)
 	if err != nil {
 		return nil, errors.Wrap(err, "fly.exec.Prepare err")
@@ -78,53 +78,53 @@ func convertPlaceholders(sql string) string {
 	return strings.Join(newParts, "")
 }
 
-func destination(columnTypes []*sql.ColumnType) func() []interface{} {
-	dest := make([]func() interface{}, 0, len(columnTypes))
+func destination(columnTypes []*sql.ColumnType) func() []any {
+	dest := make([]func() any, 0, len(columnTypes))
 	for _, v := range columnTypes {
 		//fmt.Println(v.Name(), v.DatabaseTypeName())
 		switch strings.ToUpper(v.DatabaseTypeName()) {
 		case "VARCHAR", "CHAR", "TEXT", "NVARCHAR", "LONGTEXT", "LONGBLOB", "MEDIUMTEXT", "MEDIUMBLOB", "BLOB", "TINYTEXT", "DECIMAL":
 			if nullable, _ := v.Nullable(); nullable {
-				dest = append(dest, func() interface{} {
+				dest = append(dest, func() any {
 					return new(sql.NullString)
 				})
 			} else {
-				dest = append(dest, func() interface{} {
+				dest = append(dest, func() any {
 					return new(sql.NullString)
 				})
 			}
 		case "UNSIGNED INT", "UNSIGNED TINYINT", "UNSIGNED INTEGER", "UNSIGNED SMALLINT", "UNSIGNED MEDIUMINT", "UNSIGNED TINYINTEGER":
-			dest = append(dest, func() interface{} {
+			dest = append(dest, func() any {
 				return new(uint)
 			})
 		case "UNSIGNED BIGINT":
-			dest = append(dest, func() interface{} {
+			dest = append(dest, func() any {
 				return new(uint64)
 			})
 		case "INT", "INT8", "TINYINT", "INTEGER", "SMALLINT", "MEDIUMINT", "TINYINTEGER":
-			dest = append(dest, func() interface{} {
+			dest = append(dest, func() any {
 				return new(int)
 			})
 		case "BIGINT":
-			dest = append(dest, func() interface{} {
+			dest = append(dest, func() any {
 				return new(int64)
 			})
 		case "DATETIME", "DATE", "TIMESTAMP", "TIME", "TIMESTAMPTZ":
-			dest = append(dest, func() interface{} {
+			dest = append(dest, func() any {
 				return new(sql.NullTime)
 			})
 		case "DOUBLE", "FLOAT":
-			dest = append(dest, func() interface{} {
+			dest = append(dest, func() any {
 				return new(float64)
 			})
 		default:
-			dest = append(dest, func() interface{} {
+			dest = append(dest, func() any {
 				return new(sql.NullString)
 			})
 		}
 	}
-	return func() []interface{} {
-		tmp := make([]interface{}, 0, len(dest))
+	return func() []any {
+		tmp := make([]any, 0, len(dest))
 		for _, d := range dest {
 			tmp = append(tmp, d())
 		}
@@ -153,7 +153,7 @@ func rows2SliceMap(rows *sql.Rows) (list []Row, err error) {
 			return nil, errors.Wrap(err, "fly.rows2SliceMap.Scan err")
 		}
 		row := new(Row)
-		row.Data = map[string]interface{}{}
+		row.Data = map[string]any{}
 		for i := 0; i < length; i++ {
 			switch v := tmp[i].(type) {
 			case *sql.NullString:

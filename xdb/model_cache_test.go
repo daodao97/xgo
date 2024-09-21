@@ -50,9 +50,9 @@ func TestModel_FindBy(t *testing.T) {
 }
 
 func TestModel_UpdateBy(t *testing.T) {
-	_, err := m.UpdateBy("1", map[string]interface{}{
+	_, err := m.UpdateBy("1", map[string]any{
 		"name": "圣斗士-星矢",
-		"profile": map[string]interface{}{
+		"profile": map[string]any{
 			"hobby": "技能-天马流行拳",
 		},
 	})

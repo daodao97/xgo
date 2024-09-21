@@ -48,7 +48,7 @@ func (m *model) hasOneData(rows []Row, opt HasOpts) ([]Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	var localKeys []interface{}
+	var localKeys []any
 	for _, v := range rows {
 		if val, ok := v.Data[opt.LocalKey]; ok {
 			localKeys = append(localKeys, val)
@@ -93,7 +93,7 @@ func (m *model) hasManyData(rows []Row, opt HasOpts) ([]Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	var localKeys []interface{}
+	var localKeys []any
 	for _, v := range rows {
 		if val, ok := v.Data[opt.LocalKey]; ok {
 			localKeys = append(localKeys, val)
@@ -113,9 +113,9 @@ func (m *model) hasManyData(rows []Row, opt HasOpts) ([]Row, error) {
 	}
 
 	for i, left := range rows {
-		tmp := make(map[string][]interface{})
+		tmp := make(map[string][]any)
 		for _, k := range otherKeys {
-			tmp[k] = make([]interface{}, 0)
+			tmp[k] = make([]any, 0)
 		}
 		for _, right := range _rows.List {
 			l, err := cast.ToStringE(left.Data[opt.LocalKey])

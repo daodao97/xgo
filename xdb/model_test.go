@@ -59,9 +59,9 @@ type Profile struct {
 }
 
 func Test_Insert(t *testing.T) {
-	u := map[string]interface{}{
+	u := map[string]any{
 		"name": "Seiya",
-		"profile": map[string]interface{}{
+		"profile": map[string]any{
 			"hobby": "Pegasus Ryuseiken",
 		},
 		"role_ids": []int{1, 2},
@@ -112,7 +112,7 @@ func Test_Update(t *testing.T) {
 	//assert.Equal(t, nil, err)
 	//assert.Equal(t, true, result)
 
-	result, err := m.Update(map[string]interface{}{
+	result, err := m.Update(map[string]any{
 		"id":   1,
 		"name": "星矢1",
 		"profile": &Profile{
@@ -124,10 +124,10 @@ func Test_Update(t *testing.T) {
 	assert.Equal(t, nil, err)
 	assert.Equal(t, true, result)
 
-	result, err = m.Update(map[string]interface{}{
+	result, err = m.Update(map[string]any{
 		"id":   1,
 		"name": "星矢2",
-		"profile": map[string]interface{}{
+		"profile": map[string]any{
 			"hobby": "天马流行拳2",
 		},
 		"role_ids": []int{1, 2, 3, 4},
