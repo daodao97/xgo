@@ -25,6 +25,7 @@ type Request struct {
 	timeout       time.Duration
 	formData      map[string]any
 	formUrlEncode map[string]any
+	queryParams   map[string]string
 
 	// auth
 	basicAuth bool
@@ -105,6 +106,11 @@ func (r *Request) SetFormUrlEncode(formUrlEncode map[string]any) *Request {
 	return r
 }
 
+func (r *Request) SetQueryParams(queryParams map[string]string) *Request {
+	r.queryParams = queryParams
+	return r
+}
+
 func (r *Request) SetRetry(attempts uint, delay time.Duration) *Request {
 	r.retryAttempts = attempts
 	r.retryDelay = delay
@@ -178,6 +184,21 @@ func (r *Request) do() (*Response, error) {
 		}
 		body = strings.NewReader(formBody.Encode())
 		r.headers["Content-Type"] = "application/x-www-form-urlencoded"
+	}
+
+	if r.queryParams != nil {
+		parsedURL, err := url.Parse(targetUrl)
+		if err != nil {
+			return nil, fmt.Errorf("解析 URL 失败: %w", err)
+		}
+
+		queryParams := parsedURL.Query()
+		for k, v := range r.queryParams {
+			queryParams.Add(k, v)
+		}
+
+		parsedURL.RawQuery = queryParams.Encode()
+		targetUrl = parsedURL.String()
 	}
 
 	req, err := http.NewRequest(method, targetUrl, body)
