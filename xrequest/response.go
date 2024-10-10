@@ -16,27 +16,31 @@ func NewResponse(rawResponse *http.Response, parseResponse bool) *Response {
 		rawResponse.Body = io.NopCloser(bytes.NewBuffer(body))
 	}
 
-	return &Response{RawResponse: rawResponse, StatusCode: rawResponse.StatusCode, Body: body}
+	return &Response{RawResponse: rawResponse, statusCode: rawResponse.StatusCode, body: body}
 }
 
 type Response struct {
 	RawResponse *http.Response
-	StatusCode  int
-	Body        []byte
+	statusCode  int
+	body        []byte
+}
+
+func (r *Response) StatusCode() int {
+	return r.statusCode
 }
 
 func (r *Response) String() string {
-	return string(r.Body)
+	return string(r.body)
 }
 
 func (r *Response) JSON() *xjson.Json {
-	return xjson.New(r.Body)
+	return xjson.New(r.body)
 }
 
 func (r *Response) Scan(dest any) error {
-	return json.Unmarshal(r.Body, dest)
+	return json.Unmarshal(r.body, dest)
 }
 
 func (r *Response) IsError() bool {
-	return r.StatusCode > 299
+	return r.statusCode >= http.StatusBadRequest
 }

@@ -17,7 +17,7 @@ func TestRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Log(resp.StatusCode)
+	t.Log(resp.StatusCode())
 	t.Log(resp.String())
 	t.Log(resp.JSON())
 }

@@ -11,128 +11,129 @@ import (
 	"time"
 
 	"github.com/avast/retry-go"
+	"github.com/daodao97/xgo/utils"
 )
 
 type Request struct {
-	Debug         bool
-	Method        string
-	URL           string
-	Body          any
-	ParseResponse bool
-	Headers       map[string]string
-	Proxy         string
-	Timeout       time.Duration
-	FormData      map[string]any
-	FormUrlEncode map[string]any
+	debug         bool
+	method        string
+	targetUrl     string
+	body          any
+	parseResponse bool
+	headers       map[string]string
+	proxy         string
+	timeout       time.Duration
+	formData      map[string]any
+	formUrlEncode map[string]any
 
 	// auth
-	BasicAuth bool
-	Username  string
-	Password  string
+	basicAuth bool
+	username  string
+	password  string
 
 	// retry
-	RetryAttempts uint
-	RetryDelay    time.Duration
+	retryAttempts uint
+	retryDelay    time.Duration
 }
 
 func New() *Request {
-	return &Request{ParseResponse: true}
+	return &Request{parseResponse: true, debug: utils.IsGoRun()}
 }
 
 func (r *Request) SetMethod(method string) *Request {
-	r.Method = method
+	r.method = method
 	return r
 }
 
 func (r *Request) SetURL(url string) *Request {
-	r.URL = url
+	r.targetUrl = url
 	return r
 }
 
 func (r *Request) SetBody(body any) *Request {
-	r.Body = body
+	r.body = body
 	return r
 }
 
 func (r *Request) SetDebug(debug bool) *Request {
-	r.Debug = debug
+	r.debug = debug
 	return r
 }
 
 func (r *Request) SetParseResponse(parseResponse bool) *Request {
-	r.ParseResponse = parseResponse
+	r.parseResponse = parseResponse
 	return r
 }
 
 func (r *Request) SetHeaders(headers map[string]string) *Request {
-	r.Headers = headers
+	r.headers = headers
 	return r
 }
 
 func (r *Request) SetHeader(key, value string) *Request {
-	if r.Headers == nil {
-		r.Headers = make(map[string]string)
+	if r.headers == nil {
+		r.headers = make(map[string]string)
 	}
-	r.Headers[key] = value
+	r.headers[key] = value
 	return r
 }
 
 func (r *Request) SetProxy(proxy string) *Request {
-	r.Proxy = proxy
+	r.proxy = proxy
 	return r
 }
 
 func (r *Request) SetTimeout(timeout time.Duration) *Request {
-	r.Timeout = timeout
+	r.timeout = timeout
 	return r
 }
 
 func (r *Request) SetBasicAuth(username, password string) *Request {
-	r.BasicAuth = true
-	r.Username = username
-	r.Password = password
+	r.basicAuth = true
+	r.username = username
+	r.password = password
 	return r
 }
 
 func (r *Request) SetFormData(formData map[string]any) *Request {
-	r.FormData = formData
+	r.formData = formData
 	return r
 }
 
 func (r *Request) SetFormUrlEncode(formUrlEncode map[string]any) *Request {
-	r.FormUrlEncode = formUrlEncode
+	r.formUrlEncode = formUrlEncode
 	return r
 }
 
 func (r *Request) SetRetry(attempts uint, delay time.Duration) *Request {
-	r.RetryAttempts = attempts
-	r.RetryDelay = delay
+	r.retryAttempts = attempts
+	r.retryDelay = delay
 	return r
 }
 
 func (r *Request) Do() (resp *Response, err error) {
-	if r.RetryAttempts == 0 {
+	if r.retryAttempts == 0 {
 		return r.do()
 	}
 
 	retry.Do(func() error {
 		resp, err = r.do()
 		return err
-	}, retry.Attempts(r.RetryAttempts), retry.Delay(r.RetryDelay))
+	}, retry.Attempts(r.retryAttempts), retry.Delay(r.retryDelay))
 
 	return
 }
 
 func (r *Request) do() (*Response, error) {
-	method := r.Method
+	method := r.method
 	if method == "" {
 		method = http.MethodGet
 	}
-	targetUrl := r.URL
+	targetUrl := r.targetUrl
 
 	var body io.Reader
-	if r.Body != nil {
-		jsonBody, err := json.Marshal(r.Body)
+	if r.body != nil {
+		jsonBody, err := json.Marshal(r.body)
 		if err != nil {
 			return nil, fmt.Errorf("序列化请求数据失败: %w", err)
 		}
@@ -141,22 +142,22 @@ func (r *Request) do() (*Response, error) {
 		body = nil
 	}
 
-	if r.FormData != nil {
+	if r.formData != nil {
 		formBody := url.Values{}
-		for k, v := range r.FormData {
+		for k, v := range r.formData {
 			formBody.Add(k, fmt.Sprintf("%v", v))
 		}
 		body = strings.NewReader(formBody.Encode())
-		r.Headers["Content-Type"] = "application/x-www-form-urlencoded"
+		r.headers["Content-Type"] = "application/x-www-form-urlencoded"
 	}
 
-	if r.FormUrlEncode != nil {
+	if r.formUrlEncode != nil {
 		formBody := url.Values{}
-		for k, v := range r.FormUrlEncode {
+		for k, v := range r.formUrlEncode {
 			formBody.Add(k, fmt.Sprintf("%v", v))
 		}
 		body = strings.NewReader(formBody.Encode())
-		r.Headers["Content-Type"] = "application/x-www-form-urlencoded"
+		r.headers["Content-Type"] = "application/x-www-form-urlencoded"
 	}
 
 	req, err := http.NewRequest(method, targetUrl, body)
@@ -164,27 +165,27 @@ func (r *Request) do() (*Response, error) {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
 
-	for k, v := range r.Headers {
+	for k, v := range r.headers {
 		req.Header.Set(k, v)
 	}
 
-	if r.BasicAuth {
-		req.SetBasicAuth(r.Username, r.Password)
+	if r.basicAuth {
+		req.SetBasicAuth(r.username, r.password)
 	}
 
-	if r.Debug {
+	if r.debug {
 		_curl, _ := GetCurlCommand(req)
 		fmt.Println(_curl)
 	}
 
 	client := &http.Client{}
-	if r.Proxy != "" {
+	if r.proxy != "" {
 		client.Transport = &http.Transport{Proxy: func(_ *http.Request) (*url.URL, error) {
-			return url.Parse(r.Proxy)
+			return url.Parse(r.proxy)
 		}}
 	}
-	if r.Timeout > 0 {
-		client.Timeout = r.Timeout
+	if r.timeout > 0 {
+		client.Timeout = r.timeout
 	}
 
 	resp, err := client.Do(req)
@@ -192,5 +193,5 @@ func (r *Request) do() (*Response, error) {
 		return nil, fmt.Errorf("xrequest failed: %w", err)
 	}
 
-	return NewResponse(resp, r.ParseResponse), nil
+	return NewResponse(resp, r.parseResponse), nil
 }
