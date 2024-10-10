@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	Name        string
 	DSN         string
 	ReadDsn     string
 	Driver      string
@@ -21,6 +22,17 @@ var pool = sync.Map{}
 type DbPool struct {
 	db   *sql.DB
 	conf *Config
+}
+
+func Inits(conns []*Config) error {
+	var connMap = make(map[string]*Config)
+	for _, conf := range conns {
+		if conf.Name == "" {
+			return errors.New("connection name is empty")
+		}
+		connMap[conf.Name] = conf
+	}
+	return Init(connMap)
 }
 
 func Init(conns map[string]*Config) error {
