@@ -21,6 +21,7 @@ func TestJson(t *testing.T) {
 	}
 
 	json := New(data)
+	t.Log(json.Map())
 	t.Log(json.Get("name").String())
 	t.Log(json.Set("name", "daodao2").String())
 	t.Log(json.Get("metadata").String())

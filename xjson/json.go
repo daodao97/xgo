@@ -11,10 +11,11 @@ import (
 
 type Json struct {
 	data string
+	*Var
 }
 
 func New(data any) *Json {
-	return &Json{data: ToString(data)}
+	return &Json{data: ToString(data), Var: NewVar(data)}
 }
 
 func (j *Json) Get(path string) *Var {
