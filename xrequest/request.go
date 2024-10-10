@@ -111,6 +111,26 @@ func (r *Request) SetRetry(attempts uint, delay time.Duration) *Request {
 	return r
 }
 
+func (r *Request) Get(targetUrl string) (resp *Response, err error) {
+	return r.SetMethod(http.MethodGet).SetURL(targetUrl).Do()
+}
+
+func (r *Request) Post(targetUrl string) (resp *Response, err error) {
+	return r.SetMethod(http.MethodPost).SetURL(targetUrl).Do()
+}
+
+func (r *Request) Put(targetUrl string) (resp *Response, err error) {
+	return r.SetMethod(http.MethodPut).SetURL(targetUrl).Do()
+}
+
+func (r *Request) Delete(targetUrl string) (resp *Response, err error) {
+	return r.SetMethod(http.MethodDelete).SetURL(targetUrl).Do()
+}
+
+func (r *Request) Patch(targetUrl string) (resp *Response, err error) {
+	return r.SetMethod(http.MethodPatch).SetURL(targetUrl).Do()
+}
+
 func (r *Request) Do() (resp *Response, err error) {
 	if r.retryAttempts == 0 {
 		return r.do()
