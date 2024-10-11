@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/avast/retry-go"
@@ -15,6 +16,7 @@ import (
 )
 
 type Request struct {
+	mu            sync.Mutex
 	debug         bool
 	method        string
 	targetUrl     string
@@ -35,6 +37,9 @@ type Request struct {
 	// retry
 	retryAttempts uint
 	retryDelay    time.Duration
+
+	// client
+	client *http.Client
 }
 
 func New() *Request {
@@ -61,6 +66,8 @@ func (r *Request) SetDebug(debug bool) *Request {
 	return r
 }
 
+// 是否解析响应体
+// 默认解析, 如果设置为 false, 则需要自行关闭 body.close
 func (r *Request) SetParseResponse(parseResponse bool) *Request {
 	r.parseResponse = parseResponse
 	return r
@@ -117,6 +124,11 @@ func (r *Request) SetRetry(attempts uint, delay time.Duration) *Request {
 	return r
 }
 
+func (r *Request) SetClient(client *http.Client) *Request {
+	r.client = client
+	return r
+}
+
 func (r *Request) Get(targetUrl string) (resp *Response, err error) {
 	return r.SetMethod(http.MethodGet).SetURL(targetUrl).Do()
 }
@@ -157,39 +169,15 @@ func (r *Request) do() (*Response, error) {
 	}
 	targetUrl := r.targetUrl
 
-	var body io.Reader
-	if r.body != nil {
-		jsonBody, err := json.Marshal(r.body)
-		if err != nil {
-			return nil, fmt.Errorf("序列化请求数据失败: %w", err)
-		}
-		body = bytes.NewBuffer(jsonBody)
-	} else {
-		body = nil
-	}
-
-	if r.formData != nil {
-		formBody := url.Values{}
-		for k, v := range r.formData {
-			formBody.Add(k, fmt.Sprintf("%v", v))
-		}
-		body = strings.NewReader(formBody.Encode())
-		r.headers["Content-Type"] = "application/x-www-form-urlencoded"
-	}
-
-	if r.formUrlEncode != nil {
-		formBody := url.Values{}
-		for k, v := range r.formUrlEncode {
-			formBody.Add(k, fmt.Sprintf("%v", v))
-		}
-		body = strings.NewReader(formBody.Encode())
-		r.headers["Content-Type"] = "application/x-www-form-urlencoded"
+	body, err := r.prepareBody()
+	if err != nil {
+		return nil, err
 	}
 
 	if r.queryParams != nil {
 		parsedURL, err := url.Parse(targetUrl)
 		if err != nil {
-			return nil, fmt.Errorf("解析 URL 失败: %w", err)
+			return nil, NewRequestError("解析 URL 失败", err)
 		}
 
 		queryParams := parsedURL.Query()
@@ -203,7 +191,7 @@ func (r *Request) do() (*Response, error) {
 
 	req, err := http.NewRequest(method, targetUrl, body)
 	if err != nil {
-		return nil, fmt.Errorf("创建请求失败: %w", err)
+		return nil, NewRequestError("创建请求失败", err)
 	}
 
 	for k, v := range r.headers {
@@ -219,7 +207,10 @@ func (r *Request) do() (*Response, error) {
 		fmt.Println(_curl)
 	}
 
-	client := &http.Client{}
+	client := r.client
+	if client == nil {
+		client = &http.Client{}
+	}
 	if r.proxy != "" {
 		client.Transport = &http.Transport{Proxy: func(_ *http.Request) (*url.URL, error) {
 			return url.Parse(r.proxy)
@@ -231,8 +222,36 @@ func (r *Request) do() (*Response, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("xrequest failed: %w", err)
+		return nil, NewRequestError("请求失败", err)
 	}
 
 	return NewResponse(resp, r.parseResponse), nil
+}
+
+func (r *Request) prepareBody() (io.Reader, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.body != nil {
+		jsonBody, err := json.Marshal(r.body)
+		if err != nil {
+			return nil, NewRequestError("序列化请求数据失败", err)
+		}
+		return bytes.NewBuffer(jsonBody), nil
+	}
+
+	if r.formData != nil || r.formUrlEncode != nil {
+		formBody := url.Values{}
+		data := r.formData
+		if r.formUrlEncode != nil {
+			data = r.formUrlEncode
+		}
+		for k, v := range data {
+			formBody.Add(k, fmt.Sprintf("%v", v))
+		}
+		r.headers["Content-Type"] = "application/x-www-form-urlencoded"
+		return strings.NewReader(formBody.Encode()), nil
+	}
+
+	return nil, nil
 }

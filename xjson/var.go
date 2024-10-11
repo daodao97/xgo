@@ -39,15 +39,18 @@ func (v *Var) JSON() *Json {
 }
 
 func (v *Var) Array() []any {
-	return cast.ToSlice(v.data)
+	a, _ := ToSliceE(v.data)
+	return a
 }
 
 func (v *Var) Map() map[string]any {
-	return cast.ToStringMap(v.data)
+	m, _ := ToStringMapE(v.data)
+	return m
 }
 
 func (v *Var) Slice() []any {
-	return cast.ToSlice(v.data)
+	a, _ := ToSliceE(v.data)
+	return a
 }
 
 func (v *Var) ArrayJson() []*Json {

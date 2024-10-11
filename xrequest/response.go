@@ -3,6 +3,8 @@ package xrequest
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -13,6 +15,7 @@ func NewResponse(rawResponse *http.Response, parseResponse bool) *Response {
 	var body []byte
 	if parseResponse {
 		body, _ = io.ReadAll(rawResponse.Body)
+		rawResponse.Body.Close()
 		rawResponse.Body = io.NopCloser(bytes.NewBuffer(body))
 	}
 
@@ -43,4 +46,23 @@ func (r *Response) Scan(dest any) error {
 
 func (r *Response) IsError() bool {
 	return r.statusCode >= http.StatusBadRequest
+}
+
+func (r *Response) Error() error {
+	if r.IsError() {
+		return fmt.Errorf("request failed, status code: %d, body: %s", r.statusCode, string(r.body))
+	}
+	return nil
+}
+
+func (r *Response) Bytes() []byte {
+	return r.body
+}
+
+func (r *Response) XML(v any) error {
+	return xml.Unmarshal(r.body, v)
+}
+
+func (r *Response) Headers() http.Header {
+	return r.RawResponse.Header
 }
