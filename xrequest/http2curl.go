@@ -19,7 +19,12 @@ func (c *CurlCommand) append(newSlice ...string) {
 
 // String returns a ready to copy/paste command
 func (c *CurlCommand) String() string {
-	return strings.Join(*c, " ")
+	groups := strings.Join(*c, " ")
+	parts := strings.Split(groups, "\n")
+	for i, part := range parts {
+		parts[i] = strings.TrimSpace(part)
+	}
+	return strings.Join(parts, " \\\n")
 }
 
 func bashEscape(str string) string {
@@ -50,7 +55,7 @@ func GetCurlCommand(req *http.Request) (*CurlCommand, error) {
 		command.append("-k")
 	}
 
-	command.append("-X", bashEscape(req.Method))
+	command.append("-X", bashEscape(req.Method), "\n")
 
 	if req.Body != nil {
 		var buff bytes.Buffer
@@ -62,7 +67,7 @@ func GetCurlCommand(req *http.Request) (*CurlCommand, error) {
 		req.Body = io.NopCloser(bytes.NewBuffer(buff.Bytes()))
 		if len(buff.String()) > 0 {
 			bodyEscaped := bashEscape(buff.String())
-			command.append("-d", bodyEscaped)
+			command.append("-d", bodyEscaped, "\n")
 		}
 	}
 
@@ -74,12 +79,12 @@ func GetCurlCommand(req *http.Request) (*CurlCommand, error) {
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		command.append("-H", bashEscape(fmt.Sprintf("%s: %s", k, strings.Join(req.Header[k], " "))))
+		command.append("-H", bashEscape(fmt.Sprintf("%s: %s", k, strings.Join(req.Header[k], " "))), "\n")
 	}
 
 	command.append(bashEscape(requestURL))
 
-	command.append("--compressed")
+	// command.append("--compressed")
 
 	return &command, nil
 }

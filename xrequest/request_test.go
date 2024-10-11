@@ -7,9 +7,15 @@ import (
 
 func TestRequest(t *testing.T) {
 	request := New().
-		SetMethod("GET").
-		SetHeaders(map[string]string{"Content-Type": "application/json"}).
-		SetURL("https://httpbin.org/get").
+		SetMethod("POST").
+		SetHeaders(map[string]string{
+			"Content-Type": "application/json",
+			"X-Test":       "test",
+		}).
+		SetBody(map[string]any{
+			"name": "daodao",
+		}).
+		SetURL("https://httpbin.org/post").
 		SetRetry(3, time.Second)
 	resp, err := request.Do()
 	if err != nil {
