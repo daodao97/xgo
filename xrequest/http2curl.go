@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"sort"
 	"strings"
 )
+
+var groupSplit = "<http-curl-group-xrequest>"
 
 // CurlCommand contains exec.Command compatible slice + helpers
 type CurlCommand []string
@@ -20,7 +24,7 @@ func (c *CurlCommand) append(newSlice ...string) {
 // String returns a ready to copy/paste command
 func (c *CurlCommand) String() string {
 	groups := strings.Join(*c, " ")
-	parts := strings.Split(groups, "\n")
+	parts := strings.Split(groups, groupSplit)
 	for i, part := range parts {
 		parts[i] = strings.TrimSpace(part)
 	}
@@ -55,19 +59,62 @@ func GetCurlCommand(req *http.Request) (*CurlCommand, error) {
 		command.append("-k")
 	}
 
-	command.append("-X", bashEscape(req.Method), "\n")
+	command.append("-X", bashEscape(req.Method), groupSplit)
 
 	if req.Body != nil {
-		var buff bytes.Buffer
-		_, err := buff.ReadFrom(req.Body)
-		if err != nil {
-			return nil, fmt.Errorf("getCurlCommand: buffer read from body error: %w", err)
-		}
-		// reset body for potential re-reads
-		req.Body = io.NopCloser(bytes.NewBuffer(buff.Bytes()))
-		if len(buff.String()) > 0 {
-			bodyEscaped := bashEscape(buff.String())
-			command.append("-d", bodyEscaped, "\n")
+		contentType := req.Header.Get("Content-Type")
+		if strings.HasPrefix(contentType, "multipart/form-data") {
+			// 保存原始的请求体
+			bodyBytes, err := io.ReadAll(req.Body)
+			if err != nil {
+				return nil, fmt.Errorf("getCurlCommand: read body error: %w", err)
+			}
+			// 重置 body 以便后续读取
+			req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+			// 解析 multipart form 数据
+			_, params, err := mime.ParseMediaType(contentType)
+			if err != nil {
+				return nil, fmt.Errorf("getCurlCommand: parse content-type error: %w", err)
+			}
+			boundary, ok := params["boundary"]
+			if !ok {
+				return nil, fmt.Errorf("getCurlCommand: no boundary found in content-type")
+			}
+
+			reader := multipart.NewReader(bytes.NewReader(bodyBytes), boundary)
+			for {
+				part, err := reader.NextPart()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					return nil, fmt.Errorf("getCurlCommand: read multipart error: %w", err)
+				}
+
+				if part.FileName() != "" {
+					command.append("-F", fmt.Sprintf("%s=@%s", part.FormName(), part.FileName()), groupSplit)
+				} else {
+					// 对于非文件字段，我们可以读取并包含其值
+					value, _ := io.ReadAll(part)
+					command.append("-F", fmt.Sprintf("%s=%s", part.FormName(), string(value)), groupSplit)
+				}
+			}
+
+			// 再次重置 body，确保原始内容被保留
+			req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		} else {
+			var buff bytes.Buffer
+			_, err := buff.ReadFrom(req.Body)
+			if err != nil {
+				return nil, fmt.Errorf("getCurlCommand: buffer read from body error: %w", err)
+			}
+			// reset body for potential re-reads
+			req.Body = io.NopCloser(bytes.NewBuffer(buff.Bytes()))
+			if len(buff.String()) > 0 {
+				bodyEscaped := bashEscape(buff.String())
+				command.append("-d", bodyEscaped, groupSplit)
+			}
 		}
 	}
 
@@ -79,7 +126,7 @@ func GetCurlCommand(req *http.Request) (*CurlCommand, error) {
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		command.append("-H", bashEscape(fmt.Sprintf("%s: %s", k, strings.Join(req.Header[k], " "))), "\n")
+		command.append("-H", bashEscape(fmt.Sprintf("%s: %s", k, strings.Join(req.Header[k], " "))), groupSplit)
 	}
 
 	command.append(bashEscape(requestURL))

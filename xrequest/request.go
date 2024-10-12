@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/avast/retry-go"
 	"github.com/daodao97/xgo/utils"
+	"github.com/daodao97/xgo/xlog"
 )
 
 type Request struct {
@@ -28,6 +30,7 @@ type Request struct {
 	formData      map[string]any
 	formUrlEncode map[string]any
 	queryParams   map[string]string
+	files         map[string][]File
 
 	// auth
 	basicAuth bool
@@ -40,6 +43,12 @@ type Request struct {
 
 	// client
 	client *http.Client
+}
+
+type File struct {
+	FieldName string
+	FileName  string
+	Content   io.Reader
 }
 
 func New() *Request {
@@ -126,6 +135,18 @@ func (r *Request) SetRetry(attempts uint, delay time.Duration) *Request {
 
 func (r *Request) SetClient(client *http.Client) *Request {
 	r.client = client
+	return r
+}
+
+func (r *Request) AddFile(fieldName, fileName string, content io.Reader) *Request {
+	if r.files == nil {
+		r.files = make(map[string][]File)
+	}
+	r.files[fieldName] = append(r.files[fieldName], File{
+		FieldName: fieldName,
+		FileName:  fileName,
+		Content:   content,
+	})
 	return r
 }
 
@@ -220,10 +241,13 @@ func (r *Request) do() (*Response, error) {
 		client.Timeout = r.timeout
 	}
 
+	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, NewRequestError("请求失败", err)
 	}
+	elapsed := time.Since(start)
+	xlog.Debug("xrequest", xlog.String("url", targetUrl), xlog.String("method", method), xlog.Any("status", resp.StatusCode), xlog.Duration("elapsed", elapsed))
 
 	return NewResponse(resp, r.parseResponse), nil
 }
@@ -232,12 +256,61 @@ func (r *Request) prepareBody() (io.Reader, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.body != nil {
-		jsonBody, err := json.Marshal(r.body)
-		if err != nil {
-			return nil, NewRequestError("序列化请求数据失败", err)
+	if r.files != nil {
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+
+		for _, files := range r.files {
+			for _, file := range files {
+				part, err := writer.CreateFormFile(file.FieldName, file.FileName)
+				if err != nil {
+					return nil, NewRequestError("创建文件表单失败", err)
+				}
+				_, err = io.Copy(part, file.Content)
+				if err != nil {
+					return nil, NewRequestError("写入文件内容失败", err)
+				}
+			}
 		}
-		return bytes.NewBuffer(jsonBody), nil
+
+		// 添加其他表单数据
+		if r.formData != nil {
+			for key, value := range r.formData {
+				err := writer.WriteField(key, fmt.Sprintf("%v", value))
+				if err != nil {
+					return nil, NewRequestError("写入表单字段失败", err)
+				}
+			}
+		}
+
+		err := writer.Close()
+		if err != nil {
+			return nil, NewRequestError("关闭multipart writer失败", err)
+		}
+
+		if r.headers == nil {
+			r.headers = make(map[string]string)
+		}
+		r.headers["Content-Type"] = writer.FormDataContentType()
+		return body, nil
+	}
+
+	if r.body != nil {
+		switch v := r.body.(type) {
+		case string:
+			return strings.NewReader(v), nil
+		case []byte:
+			return bytes.NewReader(v), nil
+		case io.Reader:
+			return v, nil
+		default:
+			jsonBody, err := json.Marshal(r.body)
+			if err != nil {
+				return nil, NewRequestError("序列化请求数据失败", err)
+			}
+			r.headers["Content-Type"] = "application/json"
+			return bytes.NewBuffer(jsonBody), nil
+		}
 	}
 
 	if r.formData != nil || r.formUrlEncode != nil {
