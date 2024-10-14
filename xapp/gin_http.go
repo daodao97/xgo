@@ -100,6 +100,19 @@ func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error
 
 		setDefaultValues(&req)
 
+		if validator, ok := any(req).(Validator); ok {
+			// 如果转换成功，调用 Validate 方法
+			if err := validator.Validate(); err != nil {
+				// 处理验证错误
+				c.JSON(200, gin.H{
+					"code":    400,
+					"message": translateError(err),
+				})
+				return
+			}
+			// 验证通过，继续处理
+		}
+
 		resp, err := handler(c, req)
 		if err != nil {
 			c.JSON(200, gin.H{
