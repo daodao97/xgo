@@ -110,6 +110,18 @@ func RegBeforeGet(collection string, fn func(r *http.Request, opt []xdb.Option) 
 	}
 }
 
+func RegBeforeCreate(collection string, fn func(r *http.Request, createData xdb.Record) xdb.Record) {
+	rule, ok := Cruds[collection]
+	if ok {
+		rule.BeforeCreate = fn
+		Cruds[collection] = rule
+	} else {
+		Cruds[collection] = Crud{
+			BeforeCreate: fn,
+		}
+	}
+}
+
 func RegBeforeUpdate(collection string, fn func(r *http.Request, updateData xdb.Record) xdb.Record) {
 	rule, ok := Cruds[collection]
 	if ok {
