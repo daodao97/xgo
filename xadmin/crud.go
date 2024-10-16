@@ -16,7 +16,7 @@ func PageSchema(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	table := vars["table_name"]
 
-	schema, ok := Rules[table]
+	schema, ok := Cruds[table]
 	if !ok {
 		xhttp.ResponseJson(w, map[string]any{
 			"code":    400,
@@ -36,7 +36,7 @@ func PageSchema(w http.ResponseWriter, r *http.Request) {
 func List(w http.ResponseWriter, r *http.Request) {
 	table := xhttp.Vars(r, "table_name")
 
-	schema, ok := Rules[table]
+	schema, ok := Cruds[table]
 	if !ok {
 		xhttp.ResponseJson(w, map[string]any{
 			"code":    400,
@@ -67,8 +67,8 @@ func List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if schema.ListRule != nil {
-		opt = append(opt, schema.ListRule(r)...)
+	if schema.BeforeList != nil {
+		opt = schema.BeforeList(r, opt)
 	}
 
 	count, err := m.Ctx(r.Context()).Count(opt...)
@@ -166,7 +166,7 @@ func List(w http.ResponseWriter, r *http.Request) {
 func Create(w http.ResponseWriter, r *http.Request) {
 	table := xhttp.Vars(r, "table_name")
 
-	schema, ok := Rules[table]
+	schema, ok := Cruds[table]
 	if !ok {
 		xhttp.ResponseJson(w, map[string]any{
 			"code":    400,
@@ -206,11 +206,11 @@ func Create(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func Read(w http.ResponseWriter, r *http.Request) {
+func Get(w http.ResponseWriter, r *http.Request) {
 	table := xhttp.Vars(r, "table_name")
 	id := xhttp.Vars(r, "id")
 
-	schema, ok := Rules[table]
+	schema, ok := Cruds[table]
 	if !ok {
 		xhttp.ResponseJson(w, map[string]any{
 			"code":    400,
@@ -222,8 +222,8 @@ func Read(w http.ResponseWriter, r *http.Request) {
 	opt := []xdb.Option{
 		xdb.WhereEq("id", id),
 	}
-	if schema.ViewRule != nil {
-		opt = append(opt, schema.ViewRule(r)...)
+	if schema.BeforeGet != nil {
+		opt = schema.BeforeGet(r, opt)
 	}
 
 	m := xdb.New(table)
@@ -251,7 +251,7 @@ func Update(w http.ResponseWriter, r *http.Request) {
 	table := xhttp.Vars(r, "table_name")
 	id := xhttp.Vars(r, "id")
 
-	schema, ok := Rules[table]
+	schema, ok := Cruds[table]
 	if !ok {
 		xhttp.ResponseJson(w, map[string]any{
 			"code":    400,
@@ -283,8 +283,8 @@ func Update(w http.ResponseWriter, r *http.Request) {
 	opt := []xdb.Option{
 		xdb.WhereEq("id", id),
 	}
-	if schema.UpdateRule != nil {
-		opt = append(opt, schema.UpdateRule(r)...)
+	if schema.BeforeUpdate != nil {
+		updateData = schema.BeforeUpdate(r, updateData)
 	}
 
 	m := xdb.New(table)
@@ -310,7 +310,7 @@ func Delete(w http.ResponseWriter, r *http.Request) {
 	table := xhttp.Vars(r, "table_name")
 	id := xhttp.Vars(r, "id")
 
-	schema, ok := Rules[table]
+	schema, ok := Cruds[table]
 	if !ok {
 		xhttp.ResponseJson(w, map[string]any{
 			"code":    400,
@@ -322,8 +322,8 @@ func Delete(w http.ResponseWriter, r *http.Request) {
 	opt := []xdb.Option{
 		xdb.WhereEq("id", id),
 	}
-	if schema.DeleteRule != nil {
-		opt = append(opt, schema.DeleteRule(r)...)
+	if schema.BeforeDelete != nil {
+		opt = schema.BeforeDelete(r, opt)
 	}
 
 	m := xdb.New(table)
@@ -348,7 +348,7 @@ func Delete(w http.ResponseWriter, r *http.Request) {
 func Options(w http.ResponseWriter, r *http.Request) {
 	table := xhttp.Vars(r, "table_name")
 
-	rule, ok := Rules[table]
+	rule, ok := Cruds[table]
 	if !ok {
 		xhttp.ResponseJson(w, map[string]any{
 			"code":    400,
@@ -383,16 +383,19 @@ func Options(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if rule.ViewRule != nil {
-		options = append(options, rule.ViewRule(r)...)
-	}
-
 	// Perform the query for multiple records
-	rows := model.Select(options...)
+	rows, err := model.Selects(options...)
+	if err != nil {
+		xhttp.ResponseJson(w, map[string]any{
+			"code":    500,
+			"message": err.Error(),
+		})
+		return
+	}
 
 	xhttp.ResponseJson(w, map[string]any{
 		"code": 0,
 		"msg":  "success",
-		"data": rows.List,
+		"data": rows,
 	})
 }

@@ -29,7 +29,7 @@ func GinRoute(r *gin.Engine) *gin.RouterGroup {
 	api.GET("/schema/:table_name", GinPageSchema)
 	api.POST("/:table_name/create", GinCreate)
 	api.GET("/:table_name/list", GinList)
-	api.GET("/:table_name/get/:id", GinRead)
+	api.GET("/:table_name/get/:id", GinGet)
 	api.POST("/:table_name/update/:id", GinUpdate)
 	api.DELETE("/:table_name/del", GinDelete)
 	api.GET("/:table_name/options", GinOptions)

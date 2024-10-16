@@ -51,7 +51,7 @@ func Route(r *mux.Router) *mux.Router {
 	api.HandleFunc("/schema/{table_name}", PageSchema)
 	api.HandleFunc("/{table_name}/create", Create).Methods(http.MethodPost)
 	api.HandleFunc("/{table_name}/list", List).Methods(http.MethodGet)
-	api.HandleFunc("/{table_name}/get/{id}", Read).Methods(http.MethodGet)
+	api.HandleFunc("/{table_name}/get/{id}", Get).Methods(http.MethodGet)
 	api.HandleFunc("/{table_name}/update/{id}", Update).Methods(http.MethodPost)
 	api.HandleFunc("/{table_name}/del", Delete).Methods(http.MethodDelete)
 	api.HandleFunc("/{table_name}/options", Options).Methods(http.MethodGet)

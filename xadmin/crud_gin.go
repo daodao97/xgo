@@ -14,7 +14,7 @@ import (
 func GinPageSchema(c *gin.Context) {
 	table := c.Param("table_name")
 
-	schema, ok := Rules[table]
+	schema, ok := Cruds[table]
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
@@ -33,7 +33,7 @@ func GinPageSchema(c *gin.Context) {
 func GinList(c *gin.Context) {
 	table := c.Param("table_name")
 
-	schema, ok := Rules[table]
+	schema, ok := Cruds[table]
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
@@ -64,8 +64,8 @@ func GinList(c *gin.Context) {
 		}
 	}
 
-	if schema.ListRule != nil {
-		opt = append(opt, schema.ListRule(c.Request)...)
+	if schema.BeforeList != nil {
+		opt = schema.BeforeList(c.Request, opt)
 	}
 
 	count, err := m.Ctx(c).Count(opt...)
@@ -128,18 +128,18 @@ func GinList(c *gin.Context) {
 		}
 	}
 
-	rows := m.Ctx(c).Select(opt...)
-	if rows.Err != nil {
+	records, err := m.Ctx(c).Selects(opt...)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
-			"message": rows.Err.Error(),
+			"message": err.Error(),
 		})
 		return
 	}
 
-	list := make([]xdb.Row, 0)
-	if len(rows.List) > 0 {
-		list = rows.List
+	list := make([]xdb.Record, 0)
+	if len(records) > 0 {
+		list = records
 	}
 
 	if schema.AfterList != nil {
@@ -163,7 +163,7 @@ func GinList(c *gin.Context) {
 func GinCreate(c *gin.Context) {
 	table := c.Param("table_name")
 
-	schema, ok := Rules[table]
+	schema, ok := Cruds[table]
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
@@ -203,11 +203,11 @@ func GinCreate(c *gin.Context) {
 	})
 }
 
-func GinRead(c *gin.Context) {
+func GinGet(c *gin.Context) {
 	table := c.Param("table_name")
 	id := c.Param("id")
 
-	schema, ok := Rules[table]
+	schema, ok := Cruds[table]
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
@@ -219,8 +219,8 @@ func GinRead(c *gin.Context) {
 	opt := []xdb.Option{
 		xdb.WhereEq("id", id),
 	}
-	if schema.ViewRule != nil {
-		opt = append(opt, schema.ViewRule(c.Request)...)
+	if schema.BeforeGet != nil {
+		opt = schema.BeforeGet(c.Request, opt)
 	}
 
 	m := xdb.New(table)
@@ -248,7 +248,7 @@ func GinUpdate(c *gin.Context) {
 	table := c.Param("table_name")
 	id := c.Param("id")
 
-	schema, ok := Rules[table]
+	schema, ok := Cruds[table]
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
@@ -280,8 +280,8 @@ func GinUpdate(c *gin.Context) {
 	opt := []xdb.Option{
 		xdb.WhereEq("id", id),
 	}
-	if schema.UpdateRule != nil {
-		opt = append(opt, schema.UpdateRule(c.Request)...)
+	if schema.BeforeUpdate != nil {
+		updateData = schema.BeforeUpdate(c.Request, updateData)
 	}
 
 	m := xdb.New(table)
@@ -307,7 +307,7 @@ func GinDelete(c *gin.Context) {
 	table := c.Param("table_name")
 	id := c.Param("id")
 
-	schema, ok := Rules[table]
+	schema, ok := Cruds[table]
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
@@ -319,8 +319,8 @@ func GinDelete(c *gin.Context) {
 	opt := []xdb.Option{
 		xdb.WhereEq("id", id),
 	}
-	if schema.DeleteRule != nil {
-		opt = append(opt, schema.DeleteRule(c.Request)...)
+	if schema.BeforeDelete != nil {
+		opt = schema.BeforeDelete(c.Request, opt)
 	}
 
 	m := xdb.New(table)
@@ -345,7 +345,7 @@ func GinDelete(c *gin.Context) {
 func GinOptions(c *gin.Context) {
 	table := c.Param("table_name")
 
-	rule, ok := Rules[table]
+	rule, ok := Cruds[table]
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
@@ -377,16 +377,19 @@ func GinOptions(c *gin.Context) {
 		}
 	}
 
-	if rule.ViewRule != nil {
-		options = append(options, rule.ViewRule(c.Request)...)
-	}
-
 	// Perform the query for multiple records
-	rows := model.Select(options...)
+	rows, err := model.Selects(options...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": err.Error(),
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"msg":  "success",
-		"data": rows.List,
+		"data": rows,
 	})
 }
