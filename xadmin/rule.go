@@ -17,6 +17,7 @@ type Crud struct {
 	Schema       string
 	NewModel     func(r *http.Request) xdb.Model                         // 创建自定义 model
 	BeforeGet    func(r *http.Request, opt []xdb.Option) []xdb.Option    // 在获取单个之前执行, 修改筛选条件
+	BeforeCreate func(r *http.Request, createData xdb.Record) xdb.Record // 在创建之前执行, 修改创建数据
 	BeforeUpdate func(r *http.Request, updateData xdb.Record) xdb.Record // 在更新之前执行, 修改更新数据
 	BeforeDelete func(r *http.Request, opt []xdb.Option) []xdb.Option    // 在删除之前执行, 修改筛选条件
 	BeforeList   func(r *http.Request, opt []xdb.Option) []xdb.Option    // 在列表之前执行, 修改筛选条件

@@ -189,6 +189,10 @@ func Create(w http.ResponseWriter, r *http.Request) {
 		m = schema.NewModel(r)
 	}
 
+	if schema.BeforeCreate != nil {
+		*requestBody = schema.BeforeCreate(r, *requestBody)
+	}
+
 	id, err := m.Ctx(r.Context()).Insert(*requestBody)
 	if err != nil {
 		xhttp.ResponseJson(w, map[string]any{

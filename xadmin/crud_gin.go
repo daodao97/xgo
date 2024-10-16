@@ -186,6 +186,10 @@ func GinCreate(c *gin.Context) {
 		m = schema.NewModel(c.Request)
 	}
 
+	if schema.BeforeCreate != nil {
+		requestBody = schema.BeforeCreate(c.Request, requestBody)
+	}
+
 	id, err := m.Ctx(c).Insert(requestBody)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
