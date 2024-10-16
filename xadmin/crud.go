@@ -131,18 +131,18 @@ func List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows := m.Ctx(r.Context()).Select(opt...)
-	if rows.Err != nil {
+	rows, err := m.Ctx(r.Context()).Selects(opt...)
+	if err != nil {
 		xhttp.ResponseJson(w, map[string]any{
 			"code":    500,
-			"message": rows.Err.Error(),
+			"message": err.Error(),
 		})
 		return
 	}
 
-	list := make([]xdb.Row, 0)
-	if len(rows.List) > 0 {
-		list = rows.List
+	list := make([]xdb.Record, 0)
+	if len(rows) > 0 {
+		list = rows
 	}
 
 	if schema.AfterList != nil {
