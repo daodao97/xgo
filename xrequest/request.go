@@ -291,7 +291,6 @@ func (r *Request) prepareBody() (io.Reader, error) {
 		if r.headers == nil {
 			r.headers = make(map[string]string)
 		}
-		r.headers["Content-Type"] = writer.FormDataContentType()
 		return body, nil
 	}
 
@@ -308,7 +307,6 @@ func (r *Request) prepareBody() (io.Reader, error) {
 			if err != nil {
 				return nil, NewRequestError("序列化请求数据失败", err)
 			}
-			r.headers["Content-Type"] = "application/json"
 			return bytes.NewBuffer(jsonBody), nil
 		}
 	}
