@@ -50,3 +50,18 @@ func TestRequestWithFile(t *testing.T) {
 	t.Log(resp.StatusCode())
 	t.Log(resp.JSON())
 }
+
+func TestRequestWithReqHook(t *testing.T) {
+	req := New().
+		SetMethod(http.MethodPost).
+		SetURL("http://127.0.0.1:8000").
+		AddReqHook(func(req *http.Request) {
+			req.Header.Add("X-Test", "test")
+		})
+	resp, err := req.Do()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(resp.StatusCode())
+	t.Log(resp.JSON())
+}

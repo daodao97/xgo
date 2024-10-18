@@ -2,6 +2,7 @@ package xrequest
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,6 +32,7 @@ type Request struct {
 	formUrlEncode map[string]any
 	queryParams   map[string]string
 	files         map[string][]File
+	ctx           context.Context
 
 	// auth
 	basicAuth bool
@@ -43,6 +45,8 @@ type Request struct {
 
 	// client
 	client *http.Client
+
+	reqHooks []func(req *http.Request)
 }
 
 type File struct {
@@ -150,6 +154,16 @@ func (r *Request) AddFile(fieldName, fileName string, content io.Reader) *Reques
 	return r
 }
 
+func (r *Request) AddReqHook(hook func(req *http.Request)) *Request {
+	r.reqHooks = append(r.reqHooks, hook)
+	return r
+}
+
+func (r *Request) WithContext(ctx context.Context) *Request {
+	r.ctx = ctx
+	return r
+}
+
 func (r *Request) Get(targetUrl string) (resp *Response, err error) {
 	return r.SetMethod(http.MethodGet).SetURL(targetUrl).Do()
 }
@@ -192,7 +206,7 @@ func (r *Request) do() (*Response, error) {
 
 	body, err := r.prepareBody()
 	if err != nil {
-		return nil, err
+		return nil, NewRequestError("准备请求体失败", err)
 	}
 
 	if r.queryParams != nil {
@@ -210,7 +224,7 @@ func (r *Request) do() (*Response, error) {
 		targetUrl = parsedURL.String()
 	}
 
-	req, err := http.NewRequest(method, targetUrl, body)
+	req, err := http.NewRequestWithContext(r.ctx, method, targetUrl, body)
 	if err != nil {
 		return nil, NewRequestError("创建请求失败", err)
 	}
@@ -221,6 +235,10 @@ func (r *Request) do() (*Response, error) {
 
 	if r.basicAuth {
 		req.SetBasicAuth(r.username, r.password)
+	}
+
+	for _, hook := range r.reqHooks {
+		hook(req)
 	}
 
 	if r.debug {
