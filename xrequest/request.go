@@ -26,6 +26,7 @@ type Request struct {
 	body          any
 	parseResponse bool
 	headers       map[string]string
+	cookies       map[string]string
 	proxy         string
 	timeout       time.Duration
 	formData      map[string]any
@@ -96,6 +97,19 @@ func (r *Request) SetHeader(key, value string) *Request {
 		r.headers = make(map[string]string)
 	}
 	r.headers[key] = value
+	return r
+}
+
+func (r *Request) SetCookies(cookies map[string]string) *Request {
+	r.cookies = cookies
+	return r
+}
+
+func (r *Request) SetCookie(key, value string) *Request {
+	if r.cookies == nil {
+		r.cookies = make(map[string]string)
+	}
+	r.cookies[key] = value
 	return r
 }
 
@@ -224,13 +238,22 @@ func (r *Request) do() (*Response, error) {
 		targetUrl = parsedURL.String()
 	}
 
-	req, err := http.NewRequestWithContext(r.ctx, method, targetUrl, body)
+	ctx := r.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, targetUrl, body)
 	if err != nil {
 		return nil, NewRequestError("创建请求失败", err)
 	}
 
 	for k, v := range r.headers {
 		req.Header.Set(k, v)
+	}
+
+	for k, v := range r.cookies {
+		req.AddCookie(&http.Cookie{Name: k, Value: v})
 	}
 
 	if r.basicAuth {

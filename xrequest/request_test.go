@@ -19,6 +19,10 @@ func TestRequest(t *testing.T) {
 			"Content-Type": "application/json",
 			"X-Test":       "test",
 		}).
+		SetCookies(map[string]string{
+			"test":  "test",
+			"test2": "test2",
+		}).
 		SetBody(b).
 		SetURL("https://httpbin.org/post").
 		SetRetry(3, time.Second)
