@@ -361,6 +361,9 @@ func (r *Request) prepareBody() (io.Reader, error) {
 	}
 
 	if r.body != nil {
+		if _, exists := r.headers["Content-Type"]; !exists {
+			r.headers["Content-Type"] = "application/json"
+		}
 		switch v := r.body.(type) {
 		case string:
 			return strings.NewReader(v), nil
@@ -386,7 +389,9 @@ func (r *Request) prepareBody() (io.Reader, error) {
 		for k, v := range data {
 			formBody.Add(k, fmt.Sprintf("%v", v))
 		}
-		r.headers["Content-Type"] = "application/x-www-form-urlencoded"
+		if _, exists := r.headers["Content-Type"]; !exists {
+			r.headers["Content-Type"] = "application/x-www-form-urlencoded"
+		}
 		return strings.NewReader(formBody.Encode()), nil
 	}
 
