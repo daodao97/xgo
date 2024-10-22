@@ -83,8 +83,9 @@ func TestRequestWithReqHook(t *testing.T) {
 	req := New().
 		SetMethod(http.MethodPost).
 		SetURL("http://127.0.0.1:8000").
-		AddReqHook(func(req *http.Request) {
+		AddReqHook(func(req *http.Request) error {
 			req.Header.Add("X-Test", "test")
+			return nil
 		})
 	resp, err := req.Do()
 	if err != nil {

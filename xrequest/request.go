@@ -47,7 +47,7 @@ type Request struct {
 	// client
 	client *http.Client
 
-	reqHooks []func(req *http.Request)
+	reqHooks []func(req *http.Request) error
 }
 
 type File struct {
@@ -191,7 +191,7 @@ func (r *Request) AddFile(fieldName, fileName string, content io.Reader) *Reques
 	return r
 }
 
-func (r *Request) AddReqHook(hook func(req *http.Request)) *Request {
+func (r *Request) AddReqHook(hook func(req *http.Request) error) *Request {
 	r.reqHooks = append(r.reqHooks, hook)
 	return r
 }
@@ -284,7 +284,9 @@ func (r *Request) do() (*Response, error) {
 	}
 
 	for _, hook := range r.reqHooks {
-		hook(req)
+		if err := hook(req); err != nil {
+			return nil, NewRequestError("请求钩子执行失败", err)
+		}
 	}
 
 	if r.debug {
