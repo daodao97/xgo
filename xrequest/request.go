@@ -272,7 +272,7 @@ func (r *Request) do() (*Response, error) {
 	}
 
 	for k, v := range r.headers {
-		req.Header.Set(k, v)
+		req.Header[k] = []string{v}
 	}
 
 	for k, v := range r.cookies {

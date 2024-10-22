@@ -19,7 +19,7 @@ func TestRequest(t *testing.T) {
 		SetMethod("POST").
 		SetHeaders(map[string]string{
 			"Content-Type": "application/json",
-			"X-Test":       "test",
+			"X-TEST":       "test",
 		}).
 		SetCookies(map[string]string{
 			"test":  "test",
