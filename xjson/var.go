@@ -48,6 +48,15 @@ func (v *Var) Map() map[string]any {
 	return m
 }
 
+func (v *Var) MapString() map[string]string {
+	m, _ := ToStringMapE(v.data)
+	m2 := make(map[string]string)
+	for k, v := range m {
+		m2[k] = ToString(v)
+	}
+	return m2
+}
+
 func (v *Var) Slice() []any {
 	a, _ := ToSliceE(v.data)
 	return a

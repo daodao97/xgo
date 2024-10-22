@@ -5,6 +5,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/daodao97/xgo/xjson"
 )
 
 func TestRequest(t *testing.T) {
@@ -31,6 +33,28 @@ func TestRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	t.Log(resp.StatusCode())
+	t.Log(resp.JSON())
+}
+
+func TestRequestWithQueryParams(t *testing.T) {
+
+	queryParams := struct {
+		Name string `json:"name"`
+		Age  int    `json:"age,omitempty"`
+	}{
+		Name: "daodao",
+		Age:  0,
+	}
+
+	req := New().
+		SetMethod(http.MethodGet).
+		SetURL("https://httpbin.org/get").
+		SetQueryParams(xjson.New(queryParams).MapString())
+	resp, err := req.Do()
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Log(resp.StatusCode())
 	t.Log(resp.JSON())
 }

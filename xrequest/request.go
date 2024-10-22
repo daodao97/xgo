@@ -29,8 +29,8 @@ type Request struct {
 	cookies       map[string]string
 	proxy         string
 	timeout       time.Duration
-	formData      map[string]any
-	formUrlEncode map[string]any
+	formData      map[string]string
+	formUrlEncode map[string]string
 	queryParams   map[string]string
 	files         map[string][]File
 	ctx           context.Context
@@ -88,7 +88,12 @@ func (r *Request) SetParseResponse(parseResponse bool) *Request {
 }
 
 func (r *Request) SetHeaders(headers map[string]string) *Request {
-	r.headers = headers
+	if r.headers == nil {
+		r.headers = make(map[string]string)
+	}
+	for key, value := range headers {
+		r.headers[key] = value
+	}
 	return r
 }
 
@@ -101,7 +106,12 @@ func (r *Request) SetHeader(key, value string) *Request {
 }
 
 func (r *Request) SetCookies(cookies map[string]string) *Request {
-	r.cookies = cookies
+	if r.cookies == nil {
+		r.cookies = make(map[string]string)
+	}
+	for key, value := range cookies {
+		r.cookies[key] = value
+	}
 	return r
 }
 
@@ -130,18 +140,31 @@ func (r *Request) SetBasicAuth(username, password string) *Request {
 	return r
 }
 
-func (r *Request) SetFormData(formData map[string]any) *Request {
+func (r *Request) SetFormData(formData map[string]string) *Request {
 	r.formData = formData
 	return r
 }
 
-func (r *Request) SetFormUrlEncode(formUrlEncode map[string]any) *Request {
+func (r *Request) SetFormUrlEncode(formUrlEncode map[string]string) *Request {
 	r.formUrlEncode = formUrlEncode
 	return r
 }
 
 func (r *Request) SetQueryParams(queryParams map[string]string) *Request {
-	r.queryParams = queryParams
+	if r.queryParams == nil {
+		r.queryParams = make(map[string]string)
+	}
+	for key, value := range queryParams {
+		r.queryParams[key] = value
+	}
+	return r
+}
+
+func (r *Request) SetQueryParam(key, value string) *Request {
+	if r.queryParams == nil {
+		r.queryParams = make(map[string]string)
+	}
+	r.queryParams[key] = value
 	return r
 }
 
