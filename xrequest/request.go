@@ -289,9 +289,11 @@ func (r *Request) do() (*Response, error) {
 		}
 	}
 
+	var debugInfo []string
+
 	if r.debug {
 		_curl, _ := GetCurlCommand(req)
-		fmt.Println(_curl)
+		debugInfo = append(debugInfo, "-------request curl command start-------", _curl.String())
 	}
 
 	client := r.client
@@ -312,10 +314,19 @@ func (r *Request) do() (*Response, error) {
 	if err != nil {
 		return nil, NewRequestError("请求失败", err)
 	}
+
 	elapsed := time.Since(start)
 	xlog.Debug("xrequest", xlog.String("url", targetUrl), xlog.String("method", method), xlog.Any("status", resp.StatusCode), xlog.Duration("elapsed", elapsed))
 
-	return NewResponse(resp, r.parseResponse), nil
+	_resp := NewResponse(resp, r.parseResponse)
+
+	if len(debugInfo) > 0 {
+		debugInfo = append(debugInfo, "\n\n", fmt.Sprintf("response status: %d", resp.StatusCode), fmt.Sprintf("response body: %s", _resp.String()))
+		debugInfo = append(debugInfo, "-------request curl command end-------")
+		fmt.Println(strings.Join(debugInfo, "\n"))
+	}
+
+	return _resp, nil
 }
 
 func (r *Request) prepareBody() (io.Reader, error) {
