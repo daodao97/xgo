@@ -1,65 +1,71 @@
 package xjson
 
-import "github.com/spf13/cast"
+import (
+	"github.com/tidwall/gjson"
+)
 
 func NewVar(data any) *Var {
-	return &Var{data: data}
+	if val, ok := data.(gjson.Result); ok {
+		return &Var{Result: &val}
+	}
+	val := gjson.Parse(ToString(data))
+	return &Var{Result: &val}
 }
 
 type Var struct {
-	data any
+	*gjson.Result
 }
 
-func (v *Var) String() string {
-	return ToString(v.data)
-}
-
-func (v *Var) Int() int {
-	return cast.ToInt(v.data)
+func (v *Var) IsNil() bool {
+	return v.Result.Type == gjson.Null
 }
 
 func (v *Var) Int64() int64 {
-	return cast.ToInt64(v.data)
+	return v.Result.Int()
 }
 
 func (v *Var) Int32() int32 {
-	return cast.ToInt32(v.data)
-}
-
-func (v *Var) Float() float64 {
-	return cast.ToFloat64(v.data)
-}
-
-func (v *Var) Bool() bool {
-	return cast.ToBool(v.data)
+	return int32(v.Result.Int())
 }
 
 func (v *Var) JSON() *Json {
-	return New(v.data)
+	return New(v.Result.Raw)
 }
 
 func (v *Var) Array() []any {
-	a, _ := ToSliceE(v.data)
-	return a
+	arr := v.Result.Array()
+	slice := make([]any, len(arr))
+	for i, v := range arr {
+		slice[i] = v.Raw
+	}
+	return slice
 }
 
 func (v *Var) Map() map[string]any {
-	m, _ := ToStringMapE(v.data)
-	return m
+	m := v.Result.Map()
+	m2 := make(map[string]any)
+	for k, v := range m {
+		m2[k] = v.Raw
+	}
+	return m2
 }
 
 func (v *Var) MapString() map[string]string {
-	m, _ := ToStringMapE(v.data)
+	m := v.Result.Map()
 	m2 := make(map[string]string)
 	for k, v := range m {
-		m2[k] = ToString(v)
+		m2[k] = ToString(v.Raw)
 	}
 	return m2
 }
 
 func (v *Var) Slice() []any {
-	a, _ := ToSliceE(v.data)
-	return a
+	arr := v.Result.Array()
+	slice := make([]any, len(arr))
+	for i, v := range arr {
+		slice[i] = v.Raw
+	}
+	return slice
 }
 
 func (v *Var) ArrayJson() []*Json {

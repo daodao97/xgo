@@ -7,6 +7,7 @@ import (
 	"reflect"
 
 	"github.com/spf13/cast"
+	"github.com/tidwall/gjson"
 )
 
 func jsonStringToObject(s string, v any) error {
@@ -129,6 +130,8 @@ func ToString(data any) string {
 		if err == nil {
 			str = string(b)
 		}
+	case gjson.Result:
+		str = v.String()
 	default:
 		// 尝试将任何类型转换为 JSON 字符串
 		b, err := json.Marshal(v)

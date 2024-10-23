@@ -15,7 +15,8 @@ func New(data any) *Json {
 }
 
 func (j *Json) Get(path string) *Var {
-	return NewVar(gjson.Get(j.data, path).Raw)
+	val := gjson.Get(j.data, path)
+	return NewVar(val)
 }
 
 func (j *Json) Set(path string, value any) *Json {
