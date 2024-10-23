@@ -321,7 +321,7 @@ func (r *Request) do() (*Response, error) {
 	_resp := NewResponse(resp, r.parseResponse)
 
 	if len(debugInfo) > 0 {
-		debugInfo = append(debugInfo, "\n\n", fmt.Sprintf("response status: %d", resp.StatusCode), fmt.Sprintf("response body: %s", _resp.String()))
+		debugInfo = append(debugInfo, "\n", fmt.Sprintf("response status: %d", resp.StatusCode), fmt.Sprintf("response body: %s", _resp.String()))
 		debugInfo = append(debugInfo, "-------request curl command end-------")
 		fmt.Println(strings.Join(debugInfo, "\n"))
 	}
