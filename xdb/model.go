@@ -220,19 +220,39 @@ func (m *model) Selects(opt ...Option) ([]Record, error) {
 }
 
 func (m *model) Page(page int, size int, opt ...Option) (int64, []Record, error) {
-	opt = append(opt, Limit(size), Offset((page-1)*size))
+	countOpt := filterCountOptions(opt)
+	countOpt = append(countOpt, Limit(size), Offset((page-1)*size))
 
-	total, err := m.Count(opt...)
+	total, err := m.Count(countOpt...)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	records, err := m.Selects(opt...)
+	selectOpt := append(opt, Limit(size), Offset((page-1)*size))
+	records, err := m.Selects(selectOpt...)
 	if err != nil {
 		return 0, nil, err
 	}
 
 	return total, records, nil
+}
+
+// filterCountOptions 过滤掉不适用于 Count 操作的选项
+func filterCountOptions(opts []Option) []Option {
+	filtered := make([]Option, 0, len(opts))
+	for _, opt := range opts {
+		if !isFieldOption(opt) {
+			filtered = append(filtered, opt)
+		}
+	}
+	return filtered
+}
+
+// isFieldOption 检查是否为 Field 选项
+func isFieldOption(opt Option) bool {
+	opts := &Options{}
+	opt(opts)
+	return opts.field != nil
 }
 
 func (m *model) SelectOne(opt ...Option) *Row {
