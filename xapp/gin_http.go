@@ -100,7 +100,8 @@ func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error
 
 		setDefaultValues(&req)
 
-		if validator, ok := any(req).(Validator); ok {
+		validator, ok := any(&req).(Validator)
+		if ok {
 			// 如果转换成功，调用 Validate 方法
 			if err := validator.Validate(); err != nil {
 				// 处理验证错误
