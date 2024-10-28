@@ -123,11 +123,16 @@ func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error
 			return
 		}
 
-		c.JSON(200, gin.H{
+		body := gin.H{
 			"code":    0,
 			"message": "success",
-			"data":    resp,
-		})
+		}
+
+		if resp != nil {
+			body["data"] = resp
+		}
+
+		c.JSON(200, body)
 	}
 }
 
