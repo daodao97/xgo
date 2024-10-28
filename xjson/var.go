@@ -1,6 +1,8 @@
 package xjson
 
 import (
+	"time"
+
 	"github.com/tidwall/gjson"
 )
 
@@ -84,4 +86,9 @@ func (v *Var) MapJson() map[string]*Json {
 		jsonArr[i] = New(v)
 	}
 	return jsonArr
+}
+
+func (v *Var) TimeByFormat(format string) time.Time {
+	res, _ := time.Parse(format, v.String())
+	return res
 }

@@ -1,6 +1,8 @@
 package xjson
 
 import (
+	"encoding/json"
+
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
@@ -26,4 +28,8 @@ func (j *Json) Set(path string, value any) *Json {
 
 func (j *Json) String() string {
 	return j.data
+}
+
+func (j *Json) Unmarshal(v any) error {
+	return json.Unmarshal([]byte(j.data), v)
 }

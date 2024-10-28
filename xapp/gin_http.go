@@ -54,18 +54,24 @@ func NewGin() *gin.Engine {
 
 		// 结束时间
 		end := time.Now()
-		latency := end.Sub(start)
+		duration := end.Sub(start)
 
-		// 使用 slog 记录结构化日志
-		xlog.DebugC(c, "http request",
+		// 根据状态码选择日志级别
+		logFunc := xlog.DebugC
+		if c.Writer.Status() >= 400 {
+			logFunc = xlog.ErrorC
+		}
+
+		args := []any{
 			slog.String("client_ip", c.ClientIP()),
 			slog.String("time", end.Format(time.DateTime)),
 			slog.Int("status_code", c.Writer.Status()),
-			slog.String("latency", latency.String()),
+			slog.Duration("duration", duration),
 			slog.String("method", c.Request.Method),
 			slog.String("path", c.Request.URL.Path),
-			slog.String("error_message", c.Errors.ByType(gin.ErrorTypePrivate).String()),
-		)
+		}
+
+		logFunc(c, "http request", args...)
 	})
 
 	return r

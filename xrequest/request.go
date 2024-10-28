@@ -290,10 +290,12 @@ func (r *Request) do() (*Response, error) {
 	}
 
 	var debugInfo []string
+	var _curl *CurlCommand
 
 	if r.debug {
-		_curl, _ := GetCurlCommand(req)
-		debugInfo = append(debugInfo, "-------request curl command start-------", _curl.String())
+		if _curl, err = GetCurlCommand(req); err == nil {
+			debugInfo = append(debugInfo, _curl.String())
+		}
 	}
 
 	client := r.client
@@ -315,16 +317,30 @@ func (r *Request) do() (*Response, error) {
 		return nil, NewRequestError("请求失败", err)
 	}
 
-	elapsed := time.Since(start)
-	xlog.Debug("xrequest", xlog.String("url", targetUrl), xlog.String("method", method), xlog.Any("status", resp.StatusCode), xlog.Duration("elapsed", elapsed))
-
 	_resp := NewResponse(resp, r.parseResponse)
-
 	if len(debugInfo) > 0 {
-		debugInfo = append(debugInfo, "\n", fmt.Sprintf("response status: %d", resp.StatusCode), fmt.Sprintf("response body: %s", _resp.String()))
+		debugInfo = append([]string{"-------request curl command start-------"}, debugInfo...)
+		debugInfo = append(debugInfo, fmt.Sprintf("response status: %d", resp.StatusCode), fmt.Sprintf("response body: %s", _resp.String()))
 		debugInfo = append(debugInfo, "-------request curl command end-------")
 		fmt.Println(strings.Join(debugInfo, "\n"))
 	}
+
+	duration := time.Since(start)
+	logFunc := xlog.DebugCtx
+
+	args := []any{
+		xlog.String("url", targetUrl),
+		xlog.String("method", method),
+		xlog.Any("status", resp.StatusCode),
+		xlog.Duration("duration", duration),
+	}
+	if _resp.Error() != nil {
+		logFunc = xlog.ErrorCtx
+		args = append(args, xlog.Any("error", _resp.Error()))
+		args = append(args, xlog.Any("curl", debugInfo))
+	}
+
+	logFunc(ctx, "xrequest", args...)
 
 	return _resp, nil
 }

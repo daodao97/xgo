@@ -76,3 +76,7 @@ func FromTraceId(ctx context.Context) string {
 func GetTraceId(c *gin.Context) string {
 	return FromTraceId(c.Request.Context())
 }
+
+func SetTraceId(ctx context.Context, traceId string) context.Context {
+	return context.WithValue(ctx, ctxTraceIdKey{}, traceId)
+}
