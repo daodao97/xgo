@@ -72,6 +72,9 @@ func NewGin() *gin.Engine {
 		// 根据状态码选择日志级别
 		logFunc := xlog.DebugC
 		if c.Writer.Status() >= 400 {
+			logFunc = xlog.WarnC
+		}
+		if c.Writer.Status() >= 500 {
 			logFunc = xlog.ErrorC
 		}
 
@@ -118,23 +121,19 @@ func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error
 			return
 		}
 
-		validator, ok := any(&req).(Validator)
-		if ok {
-			// 如果转换成功，调用 Validate 方法
+		if validator, ok := any(&req).(Validator); ok {
 			if err := validator.Validate(); err != nil {
-				// 处理验证错误
 				c.JSON(200, gin.H{
 					"code":    400,
 					"message": translateError(err),
 				})
 				return
 			}
-			// 验证通过，继续处理
 		}
 
 		resp, err := handler(c, req)
 		if err != nil {
-			c.JSON(200, gin.H{
+			c.JSON(500, gin.H{
 				"code":    500,
 				"message": err.Error(),
 			})

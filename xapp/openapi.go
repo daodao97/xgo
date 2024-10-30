@@ -196,6 +196,12 @@ func generateSchema(t reflect.Type) Schema {
 			return schema
 		}
 
+		if t.String() == "time.Time" {
+			schema.Type = "string"
+			schema.Format = "date-time"
+			return schema
+		}
+
 		schema.Type = "object"
 		var required []string
 		for i := 0; i < t.NumField(); i++ {
@@ -632,6 +638,9 @@ func generateParameters(t reflect.Type) []Parameter {
 		field := t.Field(i)
 		jsonTag := field.Tag.Get("json")
 		if jsonTag == "-" {
+			continue
+		}
+		if field.Tag.Get("uri") != "" {
 			continue
 		}
 		name := strings.Split(jsonTag, ",")[0]
