@@ -3,6 +3,7 @@ package xjson
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/tidwall/gjson"
 )
 
@@ -91,4 +92,9 @@ func (v *Var) MapJson() map[string]*Json {
 func (v *Var) TimeByFormat(format string) time.Time {
 	res, _ := time.Parse(format, v.String())
 	return res
+}
+
+func (v *Var) Decimal() decimal.Decimal {
+	d, _ := decimal.NewFromString(v.String())
+	return d
 }

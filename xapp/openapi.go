@@ -189,6 +189,13 @@ func generateSchema(t reflect.Type) Schema {
 
 	switch t.Kind() {
 	case reflect.Struct:
+		// 检查是否为 decimal.Decimal 类型
+		if t.String() == "decimal.Decimal" {
+			schema.Type = "string"
+			schema.Format = "decimal"
+			return schema
+		}
+
 		schema.Type = "object"
 		var required []string
 		for i := 0; i < t.NumField(); i++ {

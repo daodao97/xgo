@@ -7,6 +7,7 @@ import (
 	"github.com/daodao97/xgo/xdb/interval/util"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 	"github.com/spf13/cast"
 )
 
@@ -116,6 +117,23 @@ func (r Record) GetRecord(key string) Record {
 	mapstructure.Decode(v, &record)
 
 	return record
+}
+
+func (r Record) GetDecimal(key string) *decimal.Decimal {
+	v, ok := r[key]
+	if !ok {
+		return nil
+	}
+
+	if value, ok := v.(*decimal.Decimal); ok {
+		return value
+	}
+
+	if value, ok := v.(decimal.Decimal); ok {
+		return &value
+	}
+
+	return nil
 }
 
 // Deprecated: use Record instead

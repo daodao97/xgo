@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
+	"github.com/shopspring/decimal"
 
 	"github.com/daodao97/xgo/triceid"
 	"github.com/daodao97/xgo/utils"
@@ -25,6 +28,16 @@ func (w SlogWriter) Write(p []byte) (n int, err error) {
 }
 
 func NewGin() *gin.Engine {
+	// 添加 decimal 类型验证支持
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		v.RegisterCustomTypeFunc(func(field reflect.Value) interface{} {
+			if value, ok := field.Interface().(decimal.Decimal); ok {
+				return value.String()
+			}
+			return nil
+		}, decimal.Decimal{})
+	}
+
 	logger := SlogWriter{logger: xlog.GetLogger()}
 	gin.DefaultWriter = logger
 	gin.DefaultErrorWriter = logger
@@ -91,20 +104,19 @@ func NewGinHttpServer(addr string, engine func() *gin.Engine) NewServer {
 func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error)) func(*gin.Context) {
 	return func(c *gin.Context) {
 		var req Req
-		if err := c.ShouldBind(&req); err != nil {
-			if err := c.ShouldBindQuery(&req); err != nil {
-				setDefaultValues(&req)
-				if err := c.ShouldBindQuery(&req); err != nil {
-					c.JSON(200, gin.H{
-						"code":    400,
-						"message": translateError(err),
-					})
-					return
-				}
-			}
-		}
-
+		// 首先设置默认值
 		setDefaultValues(&req)
+
+		c.ShouldBindUri(&req)
+		c.ShouldBindQuery(&req)
+		err3 := c.ShouldBind(&req)
+		if err3 != nil {
+			c.JSON(200, gin.H{
+				"code":    400,
+				"message": translateError(err3),
+			})
+			return
+		}
 
 		validator, ok := any(&req).(Validator)
 		if ok {

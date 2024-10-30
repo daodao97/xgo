@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 )
 
 // 一般用Prepared Statements和Exec()完成INSERT, UPDATE, DELETE操作
@@ -83,7 +84,7 @@ func destination(columnTypes []*sql.ColumnType) func() []any {
 	for _, v := range columnTypes {
 		// fmt.Println(v.Name(), v.DatabaseTypeName())
 		switch strings.ToUpper(v.DatabaseTypeName()) {
-		case "VARCHAR", "CHAR", "TEXT", "NVARCHAR", "LONGTEXT", "LONGBLOB", "MEDIUMTEXT", "MEDIUMBLOB", "BLOB", "TINYTEXT", "DECIMAL":
+		case "VARCHAR", "CHAR", "TEXT", "NVARCHAR", "LONGTEXT", "LONGBLOB", "MEDIUMTEXT", "MEDIUMBLOB", "BLOB", "TINYTEXT":
 			if nullable, _ := v.Nullable(); nullable {
 				dest = append(dest, func() any {
 					return new(sql.NullString)
@@ -116,6 +117,10 @@ func destination(columnTypes []*sql.ColumnType) func() []any {
 		case "DOUBLE", "FLOAT":
 			dest = append(dest, func() any {
 				return new(float64)
+			})
+		case "DECIMAL":
+			dest = append(dest, func() any {
+				return new(decimal.Decimal)
 			})
 		default:
 			dest = append(dest, func() any {
