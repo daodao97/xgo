@@ -348,6 +348,9 @@ func (r *Request) do() (*Response, error) {
 func (r *Request) prepareBody() (io.Reader, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.headers == nil {
+		r.headers = make(map[string]string)
+	}
 
 	if r.files != nil {
 		body := &bytes.Buffer{}
@@ -381,9 +384,6 @@ func (r *Request) prepareBody() (io.Reader, error) {
 			return nil, NewRequestError("关闭multipart writer失败", err)
 		}
 
-		if r.headers == nil {
-			r.headers = make(map[string]string)
-		}
 		return body, nil
 	}
 
@@ -399,6 +399,9 @@ func (r *Request) prepareBody() (io.Reader, error) {
 		case io.Reader:
 			return v, nil
 		default:
+			if stringer, ok := v.(fmt.Stringer); ok {
+				return strings.NewReader(stringer.String()), nil
+			}
 			jsonBody, err := json.Marshal(r.body)
 			if err != nil {
 				return nil, NewRequestError("序列化请求数据失败", err)
