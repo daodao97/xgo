@@ -1,7 +1,9 @@
 package xrequest
 
 import (
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -34,7 +36,7 @@ func TestRequest(t *testing.T) {
 	}
 
 	t.Log(resp.StatusCode())
-	t.Log(resp.JSON())
+	t.Log(resp.Json())
 }
 
 func TestRequestWithQueryParams(t *testing.T) {
@@ -56,7 +58,7 @@ func TestRequestWithQueryParams(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(resp.StatusCode())
-	t.Log(resp.JSON())
+	t.Log(resp.Json())
 }
 
 func TestRequestWithFile(t *testing.T) {
@@ -76,7 +78,7 @@ func TestRequestWithFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(resp.StatusCode())
-	t.Log(resp.JSON())
+	t.Log(resp.Json())
 }
 
 func TestRequestWithReqHook(t *testing.T) {
@@ -92,5 +94,60 @@ func TestRequestWithReqHook(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(resp.StatusCode())
-	t.Log(resp.JSON())
+	t.Log(resp.Json())
+}
+
+func TestRequestSSE(t *testing.T) {
+	// 启动测试服务器
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+			return
+		}
+
+		// 发送10条测试消息
+		for i := 0; i < 10; i++ {
+			fmt.Fprintf(w, "data: Message %d\n\n", i)
+			flusher.Flush()
+			time.Sleep(1 * time.Second)
+		}
+	}))
+	defer server.Close()
+
+	req := New().
+		SetMethod(http.MethodGet).
+		SetURL(server.URL) // 使用测试服务器的URL
+	resp, err := req.Do()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(resp.StatusCode())
+
+	ch, err := resp.SSE()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 收集所有消息
+	var messages []string
+	for msg := range ch {
+		messages = append(messages, msg)
+		t.Log(msg)
+	}
+
+	// 验证接收到的消息
+	if len(messages) != 10 {
+		t.Errorf("Expected 10 messages, got %d", len(messages))
+	}
+	for i, msg := range messages {
+		expected := fmt.Sprintf("Message %d", i)
+		if msg != expected {
+			t.Errorf("Expected message %q, got %q", expected, msg)
+		}
+	}
 }
