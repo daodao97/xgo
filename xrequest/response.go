@@ -28,7 +28,7 @@ func (r *Response) parseResponse() bool {
 	if r.parsed {
 		return true
 	}
-	if r.RawResponse.Header.Get("Content-Type") == "text/event-stream" {
+	if strings.Contains(r.RawResponse.Header.Get("Content-Type"), "text/event-stream") {
 		return false
 	}
 	var body []byte
@@ -91,7 +91,7 @@ func (r *Response) Headers() http.Header {
 }
 
 func (r *Response) SSE() (chan string, error) {
-	if r.RawResponse.Header.Get("Content-Type") != "text/event-stream" {
+	if !strings.Contains(r.RawResponse.Header.Get("Content-Type"), "text/event-stream") {
 		return nil, fmt.Errorf("response is not an SSE")
 	}
 	messages := make(chan string)
