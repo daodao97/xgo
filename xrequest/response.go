@@ -13,7 +13,7 @@ import (
 	"github.com/daodao97/xgo/xjson"
 )
 
-func NewResponse(rawResponse *http.Response, parseResponse bool) *Response {
+func NewResponse(rawResponse *http.Response) *Response {
 	return &Response{RawResponse: rawResponse, statusCode: rawResponse.StatusCode}
 }
 

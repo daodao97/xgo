@@ -151,3 +151,14 @@ func TestRequestSSE(t *testing.T) {
 		}
 	}
 }
+
+func TestRequestWithDebug(t *testing.T) {
+	req := New().SetDebug(true)
+	resp, err := req.SetRetry(3, time.Second).Post("http://127.0.0.1:8000/callback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Error() != nil {
+		t.Fatal(resp.Error())
+	}
+}

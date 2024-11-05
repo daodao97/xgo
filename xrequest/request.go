@@ -24,7 +24,6 @@ type Request struct {
 	method        string
 	targetUrl     string
 	body          any
-	parseResponse bool
 	headers       map[string]string
 	cookies       map[string]string
 	proxy         string
@@ -57,7 +56,7 @@ type File struct {
 }
 
 func New() *Request {
-	return &Request{parseResponse: true, debug: utils.IsGoRun()}
+	return &Request{debug: utils.IsGoRun()}
 }
 
 func (r *Request) SetMethod(method string) *Request {
@@ -77,13 +76,6 @@ func (r *Request) SetBody(body any) *Request {
 
 func (r *Request) SetDebug(debug bool) *Request {
 	r.debug = debug
-	return r
-}
-
-// 是否解析响应体
-// 默认解析, 如果设置为 false, 则需要自行关闭 body.close
-func (r *Request) SetParseResponse(parseResponse bool) *Request {
-	r.parseResponse = parseResponse
 	return r
 }
 
@@ -226,12 +218,15 @@ func (r *Request) Do() (resp *Response, err error) {
 		return r.do()
 	}
 
-	retry.Do(func() error {
+	err = retry.Do(func() error {
 		resp, err = r.do()
 		return err
 	}, retry.Attempts(r.retryAttempts), retry.Delay(r.retryDelay))
+	if err != nil {
+		return nil, err
+	}
 
-	return
+	return resp, nil
 }
 
 func (r *Request) do() (*Response, error) {
@@ -317,7 +312,7 @@ func (r *Request) do() (*Response, error) {
 		return nil, NewRequestError("请求失败", err)
 	}
 
-	_resp := NewResponse(resp, r.parseResponse)
+	_resp := NewResponse(resp)
 	if len(debugInfo) > 0 {
 		debugInfo = append([]string{"-------request curl command start-------"}, debugInfo...)
 		debugInfo = append(debugInfo, fmt.Sprintf("response status: %d", resp.StatusCode), fmt.Sprintf("response body: %s", _resp.String()))
