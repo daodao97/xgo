@@ -48,7 +48,12 @@ func (v *Var) Map() map[string]any {
 	m := v.Result.Map()
 	m2 := make(map[string]any)
 	for k, v := range m {
-		m2[k] = v.Raw
+		switch v.Type {
+		case gjson.String:
+			m2[k] = v.Str
+		default:
+			m2[k] = v.Raw
+		}
 	}
 	return m2
 }

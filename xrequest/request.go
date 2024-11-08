@@ -33,6 +33,7 @@ type Request struct {
 	queryParams   map[string]string
 	files         map[string][]File
 	ctx           context.Context
+	req           *http.Request
 
 	// auth
 	basicAuth bool
@@ -193,6 +194,11 @@ func (r *Request) WithContext(ctx context.Context) *Request {
 	return r
 }
 
+func (r *Request) WithRequest(req *http.Request) *Request {
+	r.req = req
+	return r
+}
+
 func (r *Request) Get(targetUrl string) (resp *Response, err error) {
 	return r.SetMethod(http.MethodGet).SetURL(targetUrl).Do()
 }
@@ -230,58 +236,14 @@ func (r *Request) Do() (resp *Response, err error) {
 }
 
 func (r *Request) do() (*Response, error) {
-	method := r.method
-	if method == "" {
-		method = http.MethodGet
-	}
-	targetUrl := r.targetUrl
-
-	body, err := r.prepareBody()
-	if err != nil {
-		return nil, NewRequestError("准备请求体失败", err)
-	}
-
-	if r.queryParams != nil {
-		parsedURL, err := url.Parse(targetUrl)
-		if err != nil {
-			return nil, NewRequestError("解析 URL 失败", err)
-		}
-
-		queryParams := parsedURL.Query()
-		for k, v := range r.queryParams {
-			queryParams.Add(k, v)
-		}
-
-		parsedURL.RawQuery = queryParams.Encode()
-		targetUrl = parsedURL.String()
-	}
-
 	ctx := r.ctx
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, targetUrl, body)
+	req, err := r.makeRequest(ctx)
 	if err != nil {
 		return nil, NewRequestError("创建请求失败", err)
-	}
-
-	for k, v := range r.headers {
-		req.Header[k] = []string{v}
-	}
-
-	for k, v := range r.cookies {
-		req.AddCookie(&http.Cookie{Name: k, Value: v})
-	}
-
-	if r.basicAuth {
-		req.SetBasicAuth(r.username, r.password)
-	}
-
-	for _, hook := range r.reqHooks {
-		if err := hook(req); err != nil {
-			return nil, NewRequestError("请求钩子执行失败", err)
-		}
 	}
 
 	var debugInfo []string
@@ -324,8 +286,8 @@ func (r *Request) do() (*Response, error) {
 	logFunc := xlog.DebugCtx
 
 	args := []any{
-		xlog.String("url", targetUrl),
-		xlog.String("method", method),
+		xlog.String("url", r.targetUrl),
+		xlog.String("method", r.method),
 		xlog.Any("status", resp.StatusCode),
 		xlog.Duration("duration", duration),
 	}
@@ -338,6 +300,80 @@ func (r *Request) do() (*Response, error) {
 	logFunc(ctx, "xrequest", args...)
 
 	return _resp, nil
+}
+
+func (r *Request) makeRequest(ctx context.Context) (*http.Request, error) {
+	if r.req != nil {
+		newReq := &http.Request{
+			Method: r.req.Method,
+			Header: r.req.Header.Clone(),
+			Body:   r.req.Body,
+		}
+
+		_url, err := url.Parse(r.targetUrl)
+		if err != nil {
+			return nil, NewRequestError("解析 URL 失败", err)
+		}
+
+		if r.req.URL != nil {
+			newReq.URL = r.req.URL.ResolveReference(_url)
+		} else {
+			newReq.URL = _url
+		}
+
+		return newReq, nil
+	}
+
+	method := r.method
+	if method == "" {
+		method = http.MethodGet
+	}
+	targetUrl := r.targetUrl
+
+	body, err := r.prepareBody()
+	if err != nil {
+		return nil, NewRequestError("准备请求体失败", err)
+	}
+
+	if r.queryParams != nil {
+		parsedURL, err := url.Parse(targetUrl)
+		if err != nil {
+			return nil, NewRequestError("解析 URL 失败", err)
+		}
+
+		queryParams := parsedURL.Query()
+		for k, v := range r.queryParams {
+			queryParams.Add(k, v)
+		}
+
+		parsedURL.RawQuery = queryParams.Encode()
+		targetUrl = parsedURL.String()
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, targetUrl, body)
+	if err != nil {
+		return nil, NewRequestError("创建请求失败", err)
+	}
+
+	for k, v := range r.headers {
+		req.Header[k] = []string{v}
+	}
+
+	for k, v := range r.cookies {
+		req.AddCookie(&http.Cookie{Name: k, Value: v})
+	}
+
+	if r.basicAuth {
+		req.SetBasicAuth(r.username, r.password)
+	}
+
+	for _, hook := range r.reqHooks {
+		if err := hook(req); err != nil {
+			return nil, NewRequestError("请求钩子执行失败", err)
+		}
+	}
+
+	return req, nil
 }
 
 func (r *Request) prepareBody() (io.Reader, error) {

@@ -49,7 +49,7 @@ func (r *Response) String() string {
 	return string(r.body)
 }
 
-// deprecated
+// Deprecated: use Json instead
 func (r *Response) JSON() *xjson.Json {
 	r.parseResponse()
 	return xjson.New(r.body)
