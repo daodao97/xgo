@@ -353,12 +353,12 @@ func WhereOrNotLike(field string, value any) Option {
 	}
 }
 
-func WhereBetween(field string, value any) Option {
+func WhereBetween(field string, value1 any, value2 any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
 			operator: "between",
-			value:    value,
+			value:    []any{value1, value2},
 		})
 	}
 }
