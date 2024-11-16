@@ -67,6 +67,22 @@ func (r RateLimit) Incr(ctx context.Context, key string) bool {
 	return true
 }
 
+func (r RateLimit) IncrBy(ctx context.Context, key string, value int) bool {
+	redisKey := fmt.Sprintf("rate_limit_%s:%s", r.Prefix, key)
+	val, err := client.Get(ctx, redisKey).Int()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return true
+	}
+
+	if val == 0 {
+		client.Set(ctx, redisKey, value, r.Period)
+	} else {
+		client.IncrBy(ctx, redisKey, int64(value))
+	}
+
+	return true
+}
+
 func (r RateLimit) Get(ctx context.Context, key string) int64 {
 	redisKey := r.key(key)
 	i, err := client.Get(ctx, redisKey).Int64()
