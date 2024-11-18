@@ -31,7 +31,6 @@ var Args struct {
 	Bind          string `long:"bind" description:"Bind address" default:"127.0.0.1:4001" env:"BIND"`
 	EnableOpenAPI bool   `long:"enable-openapi" description:"Enable OpenAPI" env:"ENABLE_OPENAPI"`
 	AppEnv        string `long:"app-env" description:"App environment" env:"APP_ENV" default:"dev"`
-	Conf          string `long:"conf" short:"c" description:"Config file" env:"CONF" default:"conf.yaml"`
 }
 
 type App struct {
