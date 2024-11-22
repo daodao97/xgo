@@ -2,6 +2,7 @@ package xlog
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 
@@ -127,3 +128,13 @@ var (
 	WarnC  = WarnCtx
 	ErrorC = ErrorCtx
 )
+
+func Map(key string, value map[string]any) slog.Attr {
+	jsonBytes, _ := json.Marshal(value)
+	return slog.Attr{Key: key, Value: slog.StringValue(string(jsonBytes))}
+}
+
+func AnySlice(key string, value []any) slog.Attr {
+	jsonBytes, _ := json.Marshal(value)
+	return slog.Attr{Key: key, Value: slog.StringValue(string(jsonBytes))}
+}

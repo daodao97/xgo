@@ -138,7 +138,9 @@ func (h *Handler) Handle(_ context.Context, r slog.Record) error {
 				fmt.Fprint(&bf, color.New(color.FgCyan).Sprint("."))
 			}
 		}
-		fmt.Fprint(&bf, color.New(color.FgCyan).Sprintf("%s=", a.Key)+a.Value.String())
+
+		value := a.Value.String()
+		fmt.Fprint(&bf, color.New(color.FgCyan).Sprintf("%s=", a.Key)+value)
 	}
 
 	fmt.Fprint(&bf, "\n")
