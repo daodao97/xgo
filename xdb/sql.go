@@ -147,7 +147,18 @@ func WhereGt(field string, value any) Option {
 	}
 }
 
+// Deprecated: Use WhereGte instead.
 func WhereGe(field string, value any) Option {
+	return func(opts *Options) {
+		opts.where = append(opts.where, where{
+			field:    field,
+			operator: ">=",
+			value:    value,
+		})
+	}
+}
+
+func WhereGte(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,
@@ -167,7 +178,18 @@ func WhereLt(field string, value any) Option {
 	}
 }
 
+// Deprecated: Use WhereLte instead.
 func WhereLe(field string, value any) Option {
+	return func(opts *Options) {
+		opts.where = append(opts.where, where{
+			field:    field,
+			operator: "<=",
+			value:    value,
+		})
+	}
+}
+
+func WhereLte(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
 			field:    field,

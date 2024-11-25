@@ -214,6 +214,9 @@ func generateSchema(t reflect.Type) Schema {
 				}
 				required = append(required, embeddedSchema.Required...)
 			} else {
+				if uri := field.Tag.Get("uri"); uri != "" {
+					continue
+				}
 				jsonTag := field.Tag.Get("json")
 				if jsonTag == "-" {
 					continue // 跳过被标记为忽略的字段
