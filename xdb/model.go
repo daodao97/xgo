@@ -18,6 +18,7 @@ var ErrNotFound = errors.New("record not found")
 type Model interface {
 	PrimaryKey() string
 	Single(opt ...Option) (Record, error)
+	First(opt ...Option) (Record, error)
 	Count(opt ...Option) (count int64, err error)
 	Selects(opt ...Option) ([]Record, error)
 	Page(page int, size int, opt ...Option) (int64, []Record, error)
@@ -31,8 +32,9 @@ type Model interface {
 	FindById(id string) (Record, error)
 	FindByField(field string, val string) (Record, error)
 	UpdateBy(id string, record Record) (bool, error)
-	Transaction(fn func(Model) error) error
+	Transaction(fn func(*sql.Tx, Model) error) error
 	Ctx(ctx context.Context) Model
+	Tx(tx *sql.Tx) Model
 
 	//Deprecated: use Selects instead
 	Select(opt ...Option) (rows *Rows)
@@ -62,6 +64,7 @@ type model struct {
 	enableValidator bool
 	err             error
 	ctx             context.Context
+	tx              *sql.Tx
 }
 
 func New(table string, baseOpt ...With) Model {
@@ -99,13 +102,13 @@ func New(table string, baseOpt ...With) Model {
 	return m
 }
 
-func (m *model) Transaction(fn func(Model) error) error {
+func (m *model) Transaction(fn func(*sql.Tx, Model) error) error {
 	tx, err := m.client.Begin()
 	if err != nil {
 		return err
 	}
 
-	err = fn(m)
+	err = fn(tx, m)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -117,6 +120,11 @@ func (m *model) Transaction(fn func(Model) error) error {
 	}
 
 	return nil
+}
+
+func (m *model) Tx(tx *sql.Tx) Model {
+	m.tx = tx
+	return m
 }
 
 func (m *model) Ctx(ctx context.Context) Model {
@@ -153,7 +161,12 @@ func (m *model) Select(opt ...Option) (rows *Rows) {
 		client = m.readClient
 	}
 
-	res, err := query(client, _sql, args...)
+	var res []Row
+	if m.tx != nil {
+		res, err = queryTx(m.tx, _sql, args...)
+	} else {
+		res, err = query(client, _sql, args...)
+	}
 	kv = append(kv, "sql", _sql, "args", args)
 	if err != nil {
 		return &Rows{Err: err}
@@ -280,6 +293,11 @@ func (m *model) Single(opt ...Option) (Record, error) {
 	return rows.List[0].Data, nil
 }
 
+func (m *model) First(opt ...Option) (Record, error) {
+	opt = append(opt, Limit(1))
+	return m.Single(opt...)
+}
+
 func (m *model) Count(opt ...Option) (count int64, err error) {
 	opt = append(opt, table(m.table), AggregateCount("*"))
 	var result struct {
@@ -338,11 +356,16 @@ func (m *model) Insert(record Record) (lastId int64, err error) {
 	if m.config.Driver == "postgres" {
 		err = m.client.QueryRow(_sql, args...).Scan(&lastId)
 	} else {
-		result, err := exec(m.client, _sql, args...)
+		var res sql.Result
+		if m.tx != nil {
+			res, err = execTx(m.tx, _sql, args...)
+		} else {
+			res, err = exec(m.client, _sql, args...)
+		}
 		if err != nil {
 			return 0, err
 		}
-		return result.LastInsertId()
+		return res.LastInsertId()
 	}
 
 	if err != nil {
@@ -418,7 +441,12 @@ func (m *model) InsertBatch(records []Record) (lastId int64, err error) {
 
 	kv = append(kv, "sql", query, "args", values)
 
-	result, err := exec(m.client, query, values...)
+	var result sql.Result
+	if m.tx != nil {
+		result, err = execTx(m.tx, query, values...)
+	} else {
+		result, err = exec(m.client, query, values...)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -473,7 +501,12 @@ func (m *model) Update(record Record, opt ...Option) (ok bool, err error) {
 		_sql = convertPlaceholders(_sql)
 	}
 
-	result, err := exec(m.client, _sql, args...)
+	var result sql.Result
+	if m.tx != nil {
+		result, err = execTx(m.tx, _sql, args...)
+	} else {
+		result, err = exec(m.client, _sql, args...)
+	}
 	if err != nil {
 		return false, err
 	}
@@ -565,7 +598,12 @@ func (m *model) InsertOrUpdate(record Record, updateFields ...string) (resp Reco
 	kv = append(kv, "sql", query, "args", values)
 
 	// 执行 SQL
-	result, err := exec(m.client, query, values...)
+	var result sql.Result
+	if m.tx != nil {
+		result, err = execTx(m.tx, query, values...)
+	} else {
+		result, err = exec(m.client, query, values...)
+	}
 	if err != nil {
 		return nil, 0, err
 	}
@@ -624,7 +662,12 @@ func (m *model) Delete(opt ...Option) (ok bool, err error) {
 		_sql = convertPlaceholders(_sql)
 	}
 
-	result, err := exec(m.client, _sql, args...)
+	var result sql.Result
+	if m.tx != nil {
+		result, err = execTx(m.tx, _sql, args...)
+	} else {
+		result, err = exec(m.client, _sql, args...)
+	}
 	if err != nil {
 		return false, err
 	}
@@ -636,6 +679,9 @@ func (m *model) Delete(opt ...Option) (ok bool, err error) {
 }
 
 func (m *model) Exec(query string, args ...any) (sql.Result, error) {
+	if m.tx != nil {
+		return execTx(m.tx, query, args...)
+	}
 	return m.client.Exec(query, args...)
 }
 

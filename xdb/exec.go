@@ -36,8 +36,37 @@ func exec(db *sql.DB, _sql string, args ...any) (res sql.Result, err error) {
 	return res, nil
 }
 
+func execTx(tx *sql.Tx, _sql string, args ...any) (res sql.Result, err error) {
+	stmt, err := tx.Prepare(_sql)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+	res, err = stmt.Exec(args...)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 func query(db *sql.DB, _sql string, args ...any) (result []Row, err error) {
 	stmt, err := db.Prepare(_sql)
+	if err != nil {
+		return nil, errors.Wrap(err, "fly.exec.Prepare err")
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, errors.Wrap(err, "fly.exec.Query err")
+	}
+	defer rows.Close()
+
+	return rows2SliceMap(rows)
+}
+
+func queryTx(tx *sql.Tx, _sql string, args ...any) (result []Row, err error) {
+	stmt, err := tx.Prepare(_sql)
 	if err != nil {
 		return nil, errors.Wrap(err, "fly.exec.Prepare err")
 	}

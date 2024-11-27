@@ -13,15 +13,16 @@ const deleteMod = "delete from %s"
 type Option = func(opts *Options)
 
 type Options struct {
-	database string
-	table    string
-	field    []string
-	where    []where
-	orderBy  []string
-	groupBy  string
-	limit    int
-	offset   int
-	value    []any
+	database  string
+	table     string
+	field     []string
+	where     []where
+	orderBy   []string
+	groupBy   string
+	limit     int
+	offset    int
+	value     []any
+	forUpdate bool
 }
 
 func table(table string) Option {
@@ -33,6 +34,12 @@ func table(table string) Option {
 func database(database string) Option {
 	return func(opts *Options) {
 		opts.database = database
+	}
+}
+
+func ForUpdate() Option {
+	return func(opts *Options) {
+		opts.forUpdate = true
 	}
 }
 
@@ -104,6 +111,15 @@ type where struct {
 	value    any
 	logic    string
 	sub      []where
+	raw      string
+}
+
+func WhereRaw(raw string) Option {
+	return func(opts *Options) {
+		opts.where = append(opts.where, where{
+			raw: raw,
+		})
+	}
 }
 
 func Where(field, operator string, value any) Option {
@@ -438,6 +454,11 @@ func whereBuilder(condition []where) (sql string, args []any) {
 			}
 		}
 
+		if v.raw != "" {
+			tokens = append(tokens, v.raw)
+			continue
+		}
+
 		if v.field != "" {
 			switch v.operator {
 			case "in", "not in":
@@ -467,6 +488,7 @@ func whereBuilder(condition []where) (sql string, args []any) {
 			args = append(args, _args...)
 		}
 	}
+
 	return strings.Join(tokens, " "), args
 }
 
@@ -500,6 +522,10 @@ func SelectBuilder(opts ...Option) (sql string, args []any) {
 	if _opts.limit != 0 {
 		sql = sql + " limit ? offset ?"
 		args = append(args, _opts.limit, _opts.offset)
+	}
+
+	if _opts.forUpdate {
+		sql = sql + " for update"
 	}
 
 	return sql, args
