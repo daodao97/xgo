@@ -35,7 +35,7 @@ type Model interface {
 	Transaction(fn func(*sql.Tx, Model) error) error
 	Ctx(ctx context.Context) Model
 	Tx(tx *sql.Tx) Model
-	ClearCache()
+	ClearCache() Model
 	//Deprecated: use Selects instead
 	Select(opt ...Option) (rows *Rows)
 	//Deprecated: use Single instead

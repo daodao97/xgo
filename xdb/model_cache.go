@@ -14,8 +14,9 @@ import (
 	cache2 "github.com/daodao97/xgo/cache"
 )
 
-func (m *model) ClearCache() {
+func (m *model) ClearCache() Model {
 	m.clearCache = true
+	return m
 }
 
 func (m *model) cacheKeyPrefix(id string) string {
