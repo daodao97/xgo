@@ -14,6 +14,10 @@ import (
 	cache2 "github.com/daodao97/xgo/cache"
 )
 
+func (m *model) ClearCache() {
+	m.clearCache = true
+}
+
 func (m *model) cacheKeyPrefix(id string) string {
 	return fmt.Sprintf("%s-%s-%s", m.connection, m.table, id)
 }
@@ -37,6 +41,11 @@ func (m *model) FindBy(id string) *Row {
 	}
 
 	key := m.cacheKeyPrefix(id)
+
+	if m.clearCache {
+		cache.Del(context.Background(), key)
+		m.clearCache = false
+	}
 
 	c, err := cache.Get(context.Background(), key)
 	if err != nil && !errors.Is(err, cache2.ErrNotFound) {
