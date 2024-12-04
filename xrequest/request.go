@@ -248,10 +248,12 @@ func (r *Request) do() (*Response, error) {
 
 	var debugInfo []string
 	var _curl *CurlCommand
+	var _curlString string
 
 	if r.debug {
 		if _curl, err = GetCurlCommand(req); err == nil {
 			debugInfo = append(debugInfo, _curl.String())
+			_curlString = _curl.String()
 		}
 	}
 
@@ -270,7 +272,21 @@ func (r *Request) do() (*Response, error) {
 
 	start := time.Now()
 	resp, err := client.Do(req)
+
+	duration := time.Since(start)
+	logFunc := xlog.DebugCtx
+	args := []any{
+		xlog.String("url", r.targetUrl),
+		xlog.String("method", r.method),
+		xlog.Any("status", resp.StatusCode),
+		xlog.Duration("duration", duration),
+		xlog.Any("curl", _curlString),
+	}
+
 	if err != nil {
+		logFunc = xlog.ErrorCtx
+		args = append(args, xlog.Any("error", err))
+		logFunc(ctx, "xrequest", args...)
 		return nil, NewRequestError("请求失败", err)
 	}
 
@@ -282,19 +298,9 @@ func (r *Request) do() (*Response, error) {
 		fmt.Println(strings.Join(debugInfo, "\n"))
 	}
 
-	duration := time.Since(start)
-	logFunc := xlog.DebugCtx
-
-	args := []any{
-		xlog.String("url", r.targetUrl),
-		xlog.String("method", r.method),
-		xlog.Any("status", resp.StatusCode),
-		xlog.Duration("duration", duration),
-	}
 	if _resp.Error() != nil {
 		logFunc = xlog.ErrorCtx
 		args = append(args, xlog.Any("error", _resp.Error()))
-		args = append(args, xlog.Any("curl", debugInfo))
 	}
 
 	logFunc(ctx, "xrequest", args...)
