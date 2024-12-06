@@ -149,8 +149,27 @@ func (m *model) Tx(tx *sql.Tx) Model {
 }
 
 func (m *model) Ctx(ctx context.Context) Model {
-	m.ctx = ctx
-	return m
+	newModel := &model{
+		connection:      m.connection,
+		database:        m.database,
+		table:           m.table,
+		fakeDelKey:      m.fakeDelKey,
+		primaryKey:      m.primaryKey,
+		cacheKey:        m.cacheKey,
+		columnHook:      m.columnHook,
+		columnValidator: m.columnValidator,
+		hasOne:          m.hasOne,
+		hasMany:         m.hasMany,
+		client:          m.client,
+		readClient:      m.readClient,
+		config:          m.config,
+		saveZero:        m.saveZero,
+		enableValidator: m.enableValidator,
+		err:             m.err,
+		tx:              m.tx,
+		clearCache:      m.clearCache,
+	}
+	return newModel
 }
 
 func (m *model) PrimaryKey() string {
