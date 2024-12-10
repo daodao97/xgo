@@ -250,11 +250,9 @@ func (r *Request) do() (*Response, error) {
 	var _curl *CurlCommand
 	var _curlString string
 
-	if r.debug {
-		if _curl, err = GetCurlCommand(req); err == nil {
-			debugInfo = append(debugInfo, _curl.String())
-			_curlString = _curl.String()
-		}
+	if _curl, err = GetCurlCommand(req); err == nil {
+		debugInfo = append(debugInfo, _curl.String())
+		_curlString = _curl.String()
 	}
 
 	client := r.client
