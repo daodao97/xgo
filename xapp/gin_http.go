@@ -1,10 +1,13 @@
 package xapp
 
 import (
+	"bytes"
+	"io"
 	"log/slog"
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +28,16 @@ type SlogWriter struct {
 func (w SlogWriter) Write(p []byte) (n int, err error) {
 	w.logger.Info(string(p))
 	return len(p), nil
+}
+
+type responseBodyWriter struct {
+	gin.ResponseWriter
+	body *bytes.Buffer
+}
+
+func (r responseBodyWriter) Write(b []byte) (int, error) {
+	r.body.Write(b)
+	return r.ResponseWriter.Write(b)
 }
 
 func NewGin() *gin.Engine {
@@ -62,6 +75,20 @@ func NewGin() *gin.Engine {
 		// 开始时间
 		start := time.Now()
 
+		// 保存请求体
+		var bodyBytes []byte
+		if c.Request.Body != nil {
+			bodyBytes, _ = io.ReadAll(c.Request.Body)
+			c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		}
+
+		// 包装响应写入器
+		w := &responseBodyWriter{
+			ResponseWriter: c.Writer,
+			body:           &bytes.Buffer{},
+		}
+		c.Writer = w
+
 		// 处理请求
 		c.Next()
 
@@ -85,6 +112,39 @@ func NewGin() *gin.Engine {
 			slog.Duration("duration", duration),
 			slog.String("method", c.Request.Method),
 			slog.String("path", c.Request.URL.Path),
+		}
+
+		// 添加请求头信息
+		headers := make(map[string]string)
+		for k, v := range c.Request.Header {
+			if len(v) > 0 {
+				headers[k] = v[0]
+			}
+		}
+		args = append(args, slog.Any("headers", headers))
+
+		// 检查是否为文件上传请求
+		contentType := c.GetHeader("Content-Type")
+		isMultipart := strings.HasPrefix(contentType, "multipart/form-data")
+
+		// 如果不是文件上传，则记录请求体
+		if !isMultipart && len(bodyBytes) > 0 {
+			const maxBodyLength = 1024 * 10 // 10KB
+			bodyStr := string(bodyBytes)
+			if len(bodyStr) > maxBodyLength {
+				bodyStr = bodyStr[:maxBodyLength] + "..."
+			}
+			args = append(args, slog.String("body", bodyStr))
+		}
+
+		// 添加响应体
+		if w.body.Len() > 0 {
+			const maxRespLength = 1024 * 10 // 10KB
+			respStr := w.body.String()
+			if len(respStr) > maxRespLength {
+				respStr = respStr[:maxRespLength] + "..."
+			}
+			args = append(args, slog.String("response", respStr))
 		}
 
 		logFunc(c, "http request", args...)
