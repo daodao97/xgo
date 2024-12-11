@@ -6,6 +6,7 @@ import (
 )
 
 type Job struct {
+	Name string
 	Spec string
 	Func func()
 }
@@ -32,7 +33,7 @@ func (c *Cron) Start() error {
 		if err != nil {
 			return err
 		}
-		xlog.Debug("add job", "spec", job.Spec)
+		xlog.Debug("add job", xlog.String("name", job.Name), xlog.String("spec", job.Spec))
 	}
 	return nil
 }

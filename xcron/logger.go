@@ -8,7 +8,7 @@ import (
 
 func newLogger() *CronLogger {
 	return &CronLogger{
-		logger: xlog.GetLogger(),
+		logger: xlog.GetLogger().With(slog.String("module", "cron")),
 	}
 }
 
