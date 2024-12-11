@@ -276,7 +276,6 @@ func (r *Request) do() (*Response, error) {
 	args := []any{
 		xlog.String("url", r.targetUrl),
 		xlog.String("method", r.method),
-		xlog.Any("status", resp.StatusCode),
 		xlog.Duration("duration", duration),
 		xlog.Any("curl", _curlString),
 	}
@@ -286,6 +285,10 @@ func (r *Request) do() (*Response, error) {
 		args = append(args, xlog.Any("error", err))
 		logFunc(ctx, "xrequest", args...)
 		return nil, NewRequestError("请求失败", err)
+	}
+
+	if resp != nil {
+		args = append(args, xlog.Any("status", resp.StatusCode))
 	}
 
 	_resp := NewResponse(resp)
