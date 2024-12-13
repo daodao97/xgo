@@ -2,6 +2,7 @@ package xqueue
 
 import (
 	"context"
+	"runtime/debug"
 	"sync"
 
 	"github.com/daodao97/xgo/xlog"
@@ -75,7 +76,9 @@ func (q *RedisQueue) startWorkers() {
 					func() {
 						defer func() {
 							if r := recover(); r != nil {
-								xlog.Error("panic in handler", xlog.Any("error", r))
+								xlog.Error("RedisQueue recover panic in handler",
+									xlog.Any("error", r),
+									xlog.String("stack", string(debug.Stack())))
 							}
 						}()
 						q.handler(msg)
