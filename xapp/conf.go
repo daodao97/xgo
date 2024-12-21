@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/caarlos0/env"
 	"github.com/daodao97/xgo/xlog"
 	"github.com/fsnotify/fsnotify"
 	"gopkg.in/yaml.v3"
@@ -40,6 +41,12 @@ func fileConf(dest any, files ...string) error {
 		if err := yaml.Unmarshal(data, dest); err != nil {
 			return fmt.Errorf("解析配置文件失败 %s: %v", file, err)
 		}
+
+		// 处理环境变量替换
+		if err := env.Parse(dest); err != nil {
+			return fmt.Errorf("处理环境变量失败: %v", err)
+		}
+
 		xlog.Info("load config", xlog.String("file", file))
 	}
 
