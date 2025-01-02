@@ -13,15 +13,30 @@ import (
 	"github.com/daodao97/xgo/xtype"
 )
 
+type BeforeGetHook func(r *http.Request, opt []xdb.Option) []xdb.Option
+type AfterGetHook func(r *http.Request, record xdb.Record) xdb.Record
+type BeforeCreateHook func(r *http.Request, createData xdb.Record) (xdb.Record, error)
+type AfterCreateHook func(r *http.Request, id int64, record xdb.Record)
+type BeforeUpdateHook func(r *http.Request, updateData xdb.Record) (xdb.Record, error)
+type AfterUpdateHook func(r *http.Request, id int64, record xdb.Record)
+type BeforeDeleteHook func(r *http.Request, opt []xdb.Option) []xdb.Option
+type AfterDeleteHook func(r *http.Request, id int64)
+type BeforeListHook func(r *http.Request, opt []xdb.Option) []xdb.Option
+type AfterListHook func(r *http.Request, list []xdb.Record) []xdb.Record
+
 type Crud struct {
 	Schema       string
-	NewModel     func(r *http.Request) xdb.Model                         // 创建自定义 model
-	BeforeGet    func(r *http.Request, opt []xdb.Option) []xdb.Option    // 在获取单个之前执行, 修改筛选条件
-	BeforeCreate func(r *http.Request, createData xdb.Record) xdb.Record // 在创建之前执行, 修改创建数据
-	BeforeUpdate func(r *http.Request, updateData xdb.Record) xdb.Record // 在更新之前执行, 修改更新数据
-	BeforeDelete func(r *http.Request, opt []xdb.Option) []xdb.Option    // 在删除之前执行, 修改筛选条件
-	BeforeList   func(r *http.Request, opt []xdb.Option) []xdb.Option    // 在列表之前执行, 修改筛选条件
-	AfterList    func(r *http.Request, list []xdb.Record) []xdb.Record   // 在列表之后执行, 修改列表数据
+	NewModel     func(r *http.Request) xdb.Model // 创建自定义 model
+	BeforeGet    BeforeGetHook
+	AfterGet     AfterGetHook
+	BeforeCreate BeforeCreateHook
+	AfterCreate  AfterCreateHook
+	BeforeUpdate BeforeUpdateHook
+	AfterUpdate  AfterUpdateHook
+	BeforeDelete BeforeDeleteHook
+	AfterDelete  AfterDeleteHook
+	BeforeList   BeforeListHook
+	AfterList    AfterListHook
 }
 
 func (r Crud) GetSchema() any {
@@ -74,7 +89,7 @@ func InitSchema(schema embed.FS) {
 	}
 }
 
-func RegAfterList(collection string, fn func(r *http.Request, list []xdb.Record) []xdb.Record) {
+func RegAfterList(collection string, fn AfterListHook) {
 	rule, ok := Cruds[collection]
 	if ok {
 		rule.AfterList = fn
@@ -86,7 +101,7 @@ func RegAfterList(collection string, fn func(r *http.Request, list []xdb.Record)
 	}
 }
 
-func RegBeforeList(collection string, fn func(r *http.Request, opt []xdb.Option) []xdb.Option) {
+func RegBeforeList(collection string, fn BeforeListHook) {
 	rule, ok := Cruds[collection]
 	if ok {
 		rule.BeforeList = fn
@@ -98,7 +113,7 @@ func RegBeforeList(collection string, fn func(r *http.Request, opt []xdb.Option)
 	}
 }
 
-func RegBeforeGet(collection string, fn func(r *http.Request, opt []xdb.Option) []xdb.Option) {
+func RegBeforeGet(collection string, fn BeforeGetHook) {
 	rule, ok := Cruds[collection]
 	if ok {
 		rule.BeforeGet = fn
@@ -110,7 +125,19 @@ func RegBeforeGet(collection string, fn func(r *http.Request, opt []xdb.Option) 
 	}
 }
 
-func RegBeforeCreate(collection string, fn func(r *http.Request, createData xdb.Record) xdb.Record) {
+func RegAfterGet(collection string, fn AfterGetHook) {
+	rule, ok := Cruds[collection]
+	if ok {
+		rule.AfterGet = fn
+		Cruds[collection] = rule
+	} else {
+		Cruds[collection] = Crud{
+			AfterGet: fn,
+		}
+	}
+}
+
+func RegBeforeCreate(collection string, fn BeforeCreateHook) {
 	rule, ok := Cruds[collection]
 	if ok {
 		rule.BeforeCreate = fn
@@ -122,7 +149,19 @@ func RegBeforeCreate(collection string, fn func(r *http.Request, createData xdb.
 	}
 }
 
-func RegBeforeUpdate(collection string, fn func(r *http.Request, updateData xdb.Record) xdb.Record) {
+func RegAfterCreate(collection string, fn AfterCreateHook) {
+	rule, ok := Cruds[collection]
+	if ok {
+		rule.AfterCreate = fn
+		Cruds[collection] = rule
+	} else {
+		Cruds[collection] = Crud{
+			AfterCreate: fn,
+		}
+	}
+}
+
+func RegBeforeUpdate(collection string, fn BeforeUpdateHook) {
 	rule, ok := Cruds[collection]
 	if ok {
 		rule.BeforeUpdate = fn
@@ -134,7 +173,19 @@ func RegBeforeUpdate(collection string, fn func(r *http.Request, updateData xdb.
 	}
 }
 
-func RegBeforeDelete(collection string, fn func(r *http.Request, opt []xdb.Option) []xdb.Option) {
+func RegAfterUpdate(collection string, fn AfterUpdateHook) {
+	rule, ok := Cruds[collection]
+	if ok {
+		rule.AfterUpdate = fn
+		Cruds[collection] = rule
+	} else {
+		Cruds[collection] = Crud{
+			AfterUpdate: fn,
+		}
+	}
+}
+
+func RegBeforeDelete(collection string, fn BeforeDeleteHook) {
 	rule, ok := Cruds[collection]
 	if ok {
 		rule.BeforeDelete = fn
@@ -142,6 +193,18 @@ func RegBeforeDelete(collection string, fn func(r *http.Request, opt []xdb.Optio
 	} else {
 		Cruds[collection] = Crud{
 			BeforeDelete: fn,
+		}
+	}
+}
+
+func RegAfterDelete(collection string, fn AfterDeleteHook) {
+	rule, ok := Cruds[collection]
+	if ok {
+		rule.AfterDelete = fn
+		Cruds[collection] = rule
+	} else {
+		Cruds[collection] = Crud{
+			AfterDelete: fn,
 		}
 	}
 }

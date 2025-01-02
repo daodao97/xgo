@@ -174,7 +174,7 @@ func GinCreate(c *gin.Context) {
 
 	var requestBody xdb.Record
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"code":    400,
 			"message": err.Error(),
 		})
@@ -187,17 +187,30 @@ func GinCreate(c *gin.Context) {
 	}
 
 	if schema.BeforeCreate != nil {
-		requestBody = schema.BeforeCreate(c.Request, requestBody)
+		_requestBody, err := schema.BeforeCreate(c.Request, requestBody)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"code":    500,
+				"message": err.Error(),
+			})
+			return
+		}
+		requestBody = _requestBody
 	}
 
 	id, err := m.Ctx(c).Insert(requestBody)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"code":    500,
 			"message": err.Error(),
 		})
 		return
 	}
+
+	if schema.AfterCreate != nil {
+		schema.AfterCreate(c.Request, id, requestBody)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"msg":  "success",
@@ -232,19 +245,23 @@ func GinGet(c *gin.Context) {
 		m = schema.NewModel(c.Request)
 	}
 
-	row := m.Ctx(c).SelectOne(opt...)
-	if row.Err != nil {
+	row, err := m.Ctx(c).Single(opt...)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
-			"message": row.Err.Error(),
+			"message": err.Error(),
 		})
 		return
+	}
+
+	if schema.AfterGet != nil {
+		schema.AfterGet(c.Request, row)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
 		"message": "success",
-		"data":    row.Data,
+		"data":    row,
 	})
 }
 
@@ -254,7 +271,7 @@ func GinUpdate(c *gin.Context) {
 
 	schema, ok := Cruds[table]
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"code":    400,
 			"message": "not support collection",
 		})
@@ -263,7 +280,7 @@ func GinUpdate(c *gin.Context) {
 
 	var requestBody xdb.Record
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"code":    400,
 			"message": err.Error(),
 		})
@@ -285,7 +302,15 @@ func GinUpdate(c *gin.Context) {
 		xdb.WhereEq("id", id),
 	}
 	if schema.BeforeUpdate != nil {
-		updateData = schema.BeforeUpdate(c.Request, updateData)
+		_updateData, err := schema.BeforeUpdate(c.Request, updateData)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"code":    500,
+				"message": err.Error(),
+			})
+			return
+		}
+		updateData = _updateData
 	}
 
 	m := xdb.New(table)
@@ -295,12 +320,17 @@ func GinUpdate(c *gin.Context) {
 
 	_, err := m.Ctx(c).Update(updateData, opt...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"code":    500,
 			"message": err.Error(),
 		})
 		return
 	}
+
+	if schema.AfterUpdate != nil {
+		schema.AfterUpdate(c.Request, cast.ToInt64(id), requestBody)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"msg":  "success",
@@ -334,12 +364,17 @@ func GinDelete(c *gin.Context) {
 
 	_, err := m.Ctx(c).Update(xdb.Record{"is_deleted": 1}, opt...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"code":    500,
 			"message": err.Error(),
 		})
 		return
 	}
+
+	if schema.AfterDelete != nil {
+		schema.AfterDelete(c.Request, cast.ToInt64(id))
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"msg":  "success",
@@ -384,7 +419,7 @@ func GinOptions(c *gin.Context) {
 	// Perform the query for multiple records
 	rows, err := model.Selects(options...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"code":    500,
 			"message": err.Error(),
 		})

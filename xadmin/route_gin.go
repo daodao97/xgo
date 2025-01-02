@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"net/http"
 
+	"github.com/daodao97/xgo/xdb"
 	"github.com/daodao97/xgo/xjwt"
 	"github.com/gin-gonic/gin"
 )
@@ -48,20 +49,33 @@ func authMiddleware() gin.HandlerFunc {
 
 		token := c.GetHeader("X-Token")
 		if token == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"code": 401})
+			c.JSON(http.StatusOK, gin.H{"code": 401, "message": "Unauthorized: token is required"})
 			c.Abort()
 			return
 		}
 
-		_, err := xjwt.VerifyHMacToken(token, _jwtConf.Secret)
+		payload, err := xjwt.VerifyHMacToken(token, _jwtConf.Secret)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"code": 401,
-				"msg":  "Unauthorized: " + err.Error(),
+			c.JSON(http.StatusOK, gin.H{
+				"code":    401,
+				"message": "Unauthorized: " + err.Error(),
 			})
 			c.Abort()
 			return
 		}
+		userId := payload["user_id"]
+
+		user, err := xdb.New(operatorTable).Single(xdb.WhereEq("id", userId))
+		if err != nil || !user.GetBool("status") {
+			c.JSON(http.StatusOK, gin.H{
+				"code":    401,
+				"message": "Unauthorized: user not found or user is disabled",
+			})
+			c.Abort()
+			return
+		}
+
+		c.Set("user", payload)
 
 		c.Next()
 	}

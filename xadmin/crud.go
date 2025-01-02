@@ -190,7 +190,15 @@ func Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if schema.BeforeCreate != nil {
-		*requestBody = schema.BeforeCreate(r, *requestBody)
+		_requestBody, err := schema.BeforeCreate(r, *requestBody)
+		if err != nil {
+			xhttp.ResponseJson(w, map[string]any{
+				"code":    500,
+				"message": err.Error(),
+			})
+			return
+		}
+		requestBody = &_requestBody
 	}
 
 	id, err := m.Ctx(r.Context()).Insert(*requestBody)
@@ -288,7 +296,15 @@ func Update(w http.ResponseWriter, r *http.Request) {
 		xdb.WhereEq("id", id),
 	}
 	if schema.BeforeUpdate != nil {
-		updateData = schema.BeforeUpdate(r, updateData)
+		_updateData, err := schema.BeforeUpdate(r, updateData)
+		if err != nil {
+			xhttp.ResponseJson(w, map[string]any{
+				"code":    200,
+				"message": err.Error(),
+			})
+			return
+		}
+		updateData = _updateData
 	}
 
 	m := xdb.New(table)

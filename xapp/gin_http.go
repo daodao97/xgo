@@ -138,7 +138,7 @@ func NewGin() *gin.Engine {
 		}
 
 		// 添加响应体
-		if w.body.Len() > 0 {
+		if strings.HasPrefix(contentType, "application/json") && w.body.Len() > 0 {
 			const maxRespLength = 1024 * 10 // 10KB
 			respStr := w.body.String()
 			if len(respStr) > maxRespLength {

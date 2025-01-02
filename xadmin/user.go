@@ -16,6 +16,12 @@ import (
 	"muzzammil.xyz/jsonc"
 )
 
+var operatorTable = "operator"
+
+func SetOperatorTable(table string) {
+	operatorTable = table
+}
+
 var routes string
 
 func SetRoutes(r string) {
@@ -66,8 +72,8 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	row := xdb.New("operator").SelectOne(xdb.WhereEq("username", user.Username))
-	if row.Err != nil {
+	row, err := xdb.New(operatorTable).Single(xdb.WhereEq("username", user.Username))
+	if err != nil {
 		xhttp.ResponseJson(w, Map{
 			"code":    4001,
 			"message": "用户名或密码错误",
@@ -75,12 +81,15 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//hash, _ := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
-	//fmt.Println(string(hash), user.Password, row.GetString("password"))
+	if !row.GetBool("status") {
+		xhttp.ResponseJson(w, Map{
+			"code":    4003,
+			"message": "用户已禁用",
+		})
+		return
+	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(row.GetString("password")), []byte(user.Password))
-	if err != nil {
-		xlog.Error("bcrypt.CompareHashAndPassword", xlog.Err(err))
+	if !PasswordVerify(user.Password, row.GetString("password")) {
 		xhttp.ResponseJson(w, Map{
 			"code":    4002,
 			"message": "用户名或密码错误",
@@ -165,4 +174,13 @@ func formMutexHandler(w http.ResponseWriter, r *http.Request) {
 	xhttp.ResponseJson(w, Map{
 		"code": 0,
 	})
+}
+
+func PasswordHash(password string) string {
+	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(hash)
+}
+
+func PasswordVerify(password, hash string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
