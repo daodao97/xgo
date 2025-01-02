@@ -3,6 +3,7 @@ package xapp
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/caarlos0/env"
@@ -12,6 +13,15 @@ import (
 )
 
 // conf.yaml + conf.{env}.yaml
+
+var confDir = []string{
+	".",
+	"../",
+}
+
+func SetConfDir(dir ...string) {
+	confDir = append(confDir, dir...)
+}
 
 func getConfFile() []string {
 	files := []string{
@@ -25,29 +35,31 @@ func getConfFile() []string {
 }
 
 func fileConf(dest any, files ...string) error {
-	for _, file := range files {
-		// 检查文件是否存在
-		if _, err := os.Stat(file); os.IsNotExist(err) {
-			continue
-		}
+	for _, dir := range confDir {
+		for _, file := range files {
+			// 检查文件是否存在
+			if _, err := os.Stat(filepath.Join(dir, file)); os.IsNotExist(err) {
+				continue
+			}
 
-		// 读取文件内容
-		data, err := os.ReadFile(file)
-		if err != nil {
-			return fmt.Errorf("读取配置文件失败 %s: %v", file, err)
-		}
+			// 读取文件内容
+			data, err := os.ReadFile(file)
+			if err != nil {
+				return fmt.Errorf("读取配置文件失败 %s: %v", file, err)
+			}
 
-		// 解析 YAML 到目标结构体
-		if err := yaml.Unmarshal(data, dest); err != nil {
-			return fmt.Errorf("解析配置文件失败 %s: %v", file, err)
-		}
+			// 解析 YAML 到目标结构体
+			if err := yaml.Unmarshal(data, dest); err != nil {
+				return fmt.Errorf("解析配置文件失败 %s: %v", file, err)
+			}
 
-		// 处理环境变量替换
-		if err := env.Parse(dest); err != nil {
-			return fmt.Errorf("处理环境变量失败: %v", err)
-		}
+			// 处理环境变量替换
+			if err := env.Parse(dest); err != nil {
+				return fmt.Errorf("处理环境变量失败: %v", err)
+			}
 
-		xlog.Info("load config", xlog.String("file", file))
+			xlog.Info("load config", xlog.String("file", file))
+		}
 	}
 
 	return nil
