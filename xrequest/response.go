@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -71,7 +72,7 @@ func (r *Response) IsError() bool {
 
 func (r *Response) Error() error {
 	if r.IsError() {
-		return fmt.Errorf("request failed, status code: %d, body: %s", r.statusCode, string(r.body))
+		return errors.New(string(r.body))
 	}
 	return nil
 }
@@ -118,4 +119,59 @@ func (r *Response) SSE() (chan string, error) {
 	}()
 
 	return messages, nil
+}
+
+func (r *Response) Stream() (chan string, error) {
+	return r.SSE()
+}
+
+type StreamHook func(data []byte) (flush bool, newData []byte)
+
+func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...StreamHook) {
+	w.WriteHeader(r.statusCode)
+	for k, v := range r.RawResponse.Header {
+		w.Header()[k] = v
+	}
+	if strings.Contains(r.RawResponse.Header.Get("Content-Type"), "text/event-stream") {
+		reader := bufio.NewReader(r.RawResponse.Body)
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				if err != io.EOF {
+					http.Error(w, fmt.Sprintf("Error streaming response: %v", err), http.StatusInternalServerError)
+				}
+				return
+			}
+
+			line = bytes.TrimSpace(line)
+			if len(line) == 0 {
+				continue
+			}
+
+			flush := true
+			for _, f := range hooks {
+				flush, line = f(line)
+			}
+			if !flush {
+				continue
+			}
+
+			// 写入响应
+			if _, err := w.Write(append(bytes.TrimSpace(line), '\n', '\n')); err != nil {
+				http.Error(w, fmt.Sprintf("Error writing response: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			// 刷新响应
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+		}
+	}
+
+	if r.parsed {
+		w.Write(r.body)
+	} else {
+		io.Copy(w, r.RawResponse.Body)
+	}
 }

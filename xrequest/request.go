@@ -294,7 +294,16 @@ func (r *Request) do() (*Response, error) {
 	_resp := NewResponse(resp)
 	if len(debugInfo) > 0 {
 		debugInfo = append([]string{"-------request curl command start-------"}, debugInfo...)
-		debugInfo = append(debugInfo, fmt.Sprintf("response status: %d", resp.StatusCode), fmt.Sprintf("response body: %s", _resp.String()))
+		debugInfo = append(debugInfo, fmt.Sprintf("response status: %d", resp.StatusCode))
+
+		// 只在响应是文本类型时打印响应体
+		contentType := resp.Header.Get("Content-Type")
+		if strings.Contains(contentType, "text") ||
+			strings.Contains(contentType, "json") ||
+			strings.Contains(contentType, "xml") {
+			debugInfo = append(debugInfo, fmt.Sprintf("response body: %s", _resp.String()))
+		}
+
 		debugInfo = append(debugInfo, "-------request curl command end-------")
 		fmt.Println(strings.Join(debugInfo, "\n"))
 	}

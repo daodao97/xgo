@@ -125,7 +125,7 @@ func (m *model) FindByKey(key string, val string) *Row {
 	}
 
 	if c != "" {
-		xlog.Debug("FindBy key:", xlog.Any("key", key), xlog.Any("val", val), xlog.Any("cache", c))
+		xlog.Debug("FindBy key:", xlog.String("model", m.table), xlog.Any("key", key), xlog.Any("val", val), xlog.Any("cache", c))
 		return m.FindBy(c)
 	}
 

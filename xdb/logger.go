@@ -47,7 +47,7 @@ func dbLog(ctx context.Context, prefix string, start time.Time, err *error, kv *
 
 	if *err != nil {
 		_log = append(_log, xlog.Any("error", *err))
-		xlog.Error("query", _log...)
+		xlog.ErrorC(ctx, "query", _log...)
 		return
 	}
 	xlog.DebugC(ctx, "query", _log...)

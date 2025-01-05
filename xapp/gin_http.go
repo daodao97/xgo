@@ -137,8 +137,11 @@ func NewGin() *gin.Engine {
 			args = append(args, slog.String("body", bodyStr))
 		}
 
+		// 获取响应的 Content-Type
+		responseContentType := w.Header().Get("Content-Type")
+
 		// 添加响应体
-		if strings.HasPrefix(contentType, "application/json") && w.body.Len() > 0 {
+		if strings.HasPrefix(responseContentType, "application/json") && w.body.Len() > 0 {
 			const maxRespLength = 1024 * 10 // 10KB
 			respStr := w.body.String()
 			if len(respStr) > maxRespLength {

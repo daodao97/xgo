@@ -149,27 +149,8 @@ func (m *model) Tx(tx *sql.Tx) Model {
 }
 
 func (m *model) Ctx(ctx context.Context) Model {
-	newModel := &model{
-		connection:      m.connection,
-		database:        m.database,
-		table:           m.table,
-		fakeDelKey:      m.fakeDelKey,
-		primaryKey:      m.primaryKey,
-		cacheKey:        m.cacheKey,
-		columnHook:      m.columnHook,
-		columnValidator: m.columnValidator,
-		hasOne:          m.hasOne,
-		hasMany:         m.hasMany,
-		client:          m.client,
-		readClient:      m.readClient,
-		config:          m.config,
-		saveZero:        m.saveZero,
-		enableValidator: m.enableValidator,
-		err:             m.err,
-		tx:              m.tx,
-		clearCache:      m.clearCache,
-	}
-	return newModel
+	m.ctx = ctx
+	return m
 }
 
 func (m *model) PrimaryKey() string {
@@ -565,9 +546,9 @@ func (m *model) Update(record Record, opt ...Option) (ok bool, err error) {
 				key := m.cacheKeyPrefix(cast.ToString(val))
 				err = cache.Del(context.Background(), key)
 				if err != nil {
-					xlog.Error("del key after update", xlog.Any(k, val), xlog.Err(err))
+					xlog.ErrorC(m.ctx, "del key after update", xlog.Any(k, val), xlog.Err(err))
 				} else {
-					xlog.Debug("del key after update", xlog.Any(k, val))
+					xlog.DebugC(m.ctx, "del key after update", xlog.Any(k, val))
 				}
 			} else {
 				// if update other field, delete cache by primary key
@@ -576,9 +557,9 @@ func (m *model) Update(record Record, opt ...Option) (ok bool, err error) {
 					key := m.cacheKeyPrefix(cachedPk)
 					err = cache.Del(context.Background(), key)
 					if err != nil {
-						xlog.Error("del key after update", xlog.Any(k, val), xlog.Err(err))
+						xlog.ErrorC(m.ctx, "del key after update", xlog.Any(k, val), xlog.Err(err))
 					} else {
-						xlog.Debug("del key after update", xlog.Any(k, val))
+						xlog.DebugC(m.ctx, "del key after update", xlog.Any(k, val))
 					}
 				}
 			}

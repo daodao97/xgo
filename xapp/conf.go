@@ -8,6 +8,7 @@ import (
 
 	"github.com/caarlos0/env"
 	"github.com/daodao97/xgo/xlog"
+	"github.com/daodao97/xgo/xutil"
 	"github.com/fsnotify/fsnotify"
 	"gopkg.in/yaml.v3"
 )
@@ -67,6 +68,9 @@ func fileConf(dest any, files ...string) error {
 
 // InitConf 初始化配置
 func InitConf(dest any) error {
+	if !xutil.IsPtr(dest) {
+		return fmt.Errorf("配置目标必须是结构体指针类型")
+	}
 	confFiles := getConfFile()
 	err := fileConf(dest, confFiles...)
 	if err != nil {

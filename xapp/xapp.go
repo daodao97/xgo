@@ -72,6 +72,7 @@ func (a *App) Run() error {
 	// 执行所有 Startup 函数
 	for _, startup := range a.startups {
 		if err := startup(); err != nil {
+			xlog.Error("startup error", xlog.Err(err))
 			return fmt.Errorf("startup error: %w", err)
 		}
 	}
