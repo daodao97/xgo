@@ -1,6 +1,7 @@
 package xapp
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,13 +55,13 @@ func fileConf(dest any, files ...string) error {
 				return fmt.Errorf("解析配置文件失败 %s: %v", file, err)
 			}
 
-			// 处理环境变量替换
-			if err := env.Parse(dest); err != nil {
-				return fmt.Errorf("处理环境变量失败: %v", err)
-			}
-
 			xlog.Info("load config", xlog.String("file", file))
 		}
+	}
+
+	// 处理环境变量替换
+	if err := env.Parse(dest); err != nil {
+		return fmt.Errorf("处理环境变量失败: %v", err)
 	}
 
 	return nil
@@ -83,8 +84,7 @@ func InitConf(dest any) error {
 		return fmt.Errorf("创建监听器失败: %v", err)
 	}
 
-	// 启动监听协程
-	go func() {
+	xutil.Go(context.Background(), func() {
 		for {
 			select {
 			case event, ok := <-watcher.Events:
@@ -107,7 +107,7 @@ func InitConf(dest any) error {
 				xlog.Error("监听错误", xlog.Err(err))
 			}
 		}
-	}()
+	})
 
 	for _, file := range confFiles {
 		if err := watcher.Add(file); err != nil {

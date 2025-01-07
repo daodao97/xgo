@@ -33,7 +33,7 @@ func Init(opt *redis.Options) error {
 
 var clients sync.Map
 
-func Inits(conf []*Options) error {
+func Inits(conf []Options) error {
 	for _, conf := range conf {
 		if conf.Name == "" {
 			conf.Name = "default"
