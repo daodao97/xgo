@@ -170,8 +170,14 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...StreamHo
 	}
 
 	if r.parsed {
-		w.Write(r.body)
+		if _, err := w.Write(r.body); err != nil {
+			http.Error(w, fmt.Sprintf("Error writing response: %v", err), http.StatusInternalServerError)
+			return
+		}
 	} else {
-		io.Copy(w, r.RawResponse.Body)
+		if _, err := io.Copy(w, r.RawResponse.Body); err != nil {
+			http.Error(w, fmt.Sprintf("Error copying response: %v", err), http.StatusInternalServerError)
+			return
+		}
 	}
 }
