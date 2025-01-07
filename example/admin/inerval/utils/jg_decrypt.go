@@ -14,20 +14,6 @@ import (
 )
 
 var privateKey = []byte(`-----BEGIN RSA PRIVATE KEY-----
-MIICdgIBADANBgkqhkiG9w0BAQEFAASCAmAwggJcAgEAAoGBAKmiwHqTwyb1uqRn
-7pBax3tEfyE3ixb60mtdCPjiDAyDwLuxLeDOEJeYNUsT3SnetUhGxP5P7V2v8FLk
-AvCaCe4trOutL6apRu2TFn7sHZclFeiI4xomPMzxTJkKpjQKLaqU0a2hBhG1nJ2M
-4y5QldOKbVc2eO2gtqJAivpCD2mHAgMBAAECgYAmieQitPksG72IZlhLkWQqfBhJ
-yp2d3eP6IkvMh0ZnfXNG8OzUWtxoJFtPMDcZsRAMWI+emzf5BeSaYFTOpqBEjmjd
-kOrjQXbDmQmpjghKQh79x+KRr+smiy5kPqUM8KrocF7Df3VjSL3AUws7Ql15K+PR
-rWCMuHovZv9C2JkDyQJBANuMePXfyiPtOiOx/mj1gowioaliJRKuS5Xhpr0r2V0+
-MucSqtdgDt3cIpkJh56fZbwBPk1AnyCmOW8Adbt/XosCQQDFzNFAeiNjW5LxKu03
-qSrSdajumA5cOIuHukEwCXLw42mpL69Otsv5jfI/UmYR+ltreLU3p5V56QmYdo7p
-xhx1AkBNrEr3Ie+P+lPBYS2S0JkZHv92v6RCEavoIOcush66oFC985rBi9h2oXUU
-E40Jj3ccpov2JNCnameTX+RHK261AkEAukFziVN5n0XLyGyzk4YoXKWOvZ1RaGWW
-fehVGfbL1SlPhZDxcx2OVR/kzNu6YZNuInU3r4COsI1QC9EYIen7QQJAJVE4ICq7
-2sxbzTlrhJtuGuBUJ+MYLWV9sjxtyW8LV3rW9O81ikepxjgdmpQXWAPz+1dInwzp
-R6shEFi4gcc6vg==
 -----END RSA PRIVATE KEY-----`)
 
 func ParseToken(token string) (string, error) {
@@ -40,7 +26,7 @@ func ParseToken(token string) (string, error) {
 	}{}
 
 	resp, err := resty.New().R().
-		SetBasicAuth("843ed270e97e5959a0a99d99", "80d6195868f9d15b996cc5cd").
+		SetBasicAuth("", "").
 		SetBody(xdb.Record{"loginToken": token, "exID": "1234566"}).
 		SetResult(&result).
 		Post("https://api.verification.jpush.cn/v1/web/loginTokenVerify")

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/daodao97/xgo/xlog"
 	"github.com/davecgh/go-spew/spew"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
@@ -28,7 +29,7 @@ func init() {
 			Validate(
 				"name",
 				func(v *ValidInfo) error {
-					_ = logger.Log(LevelDebug, v.Field+"字段的一个自定义校验")
+					xlog.Info(v.Field + "字段的一个自定义校验")
 					return nil
 				},
 				Required(),

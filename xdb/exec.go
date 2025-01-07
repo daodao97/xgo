@@ -111,7 +111,6 @@ func convertPlaceholders(sql string) string {
 func destination(columnTypes []*sql.ColumnType) func() []any {
 	dest := make([]func() any, 0, len(columnTypes))
 	for _, v := range columnTypes {
-		// fmt.Println(v.Name(), v.DatabaseTypeName())
 		switch strings.ToUpper(v.DatabaseTypeName()) {
 		case "VARCHAR", "CHAR", "TEXT", "NVARCHAR", "LONGTEXT", "LONGBLOB", "MEDIUMTEXT", "MEDIUMBLOB", "BLOB", "TINYTEXT":
 			if nullable, _ := v.Nullable(); nullable {

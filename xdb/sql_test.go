@@ -39,8 +39,8 @@ func TestInsertBuilder(t *testing.T) {
 func TestUpdateBuilder(t *testing.T) {
 	sql, args := UpdateBuilder(
 		table("user"),
-		Field("id", "name"),
-		Value("1", "daodao"),
+		Field("id", "name", "age"),
+		Value("1", "daodao", UpdateValue{Value: 18, Op: OpAdd}),
 		WhereEq("id", 1),
 	)
 	fmt.Println(sql, args)

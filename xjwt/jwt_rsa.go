@@ -2,6 +2,8 @@ package xjwt
 
 import (
 	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -34,4 +36,30 @@ func VerifyRasToken(tokenString string, publicKey *rsa.PublicKey) (jwt.MapClaims
 	}
 
 	return token.Claims.(jwt.MapClaims), nil
+}
+
+func ParsePublicKeyFromPEM(publicKeyPEM string) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode([]byte(publicKeyPEM))
+	if block == nil {
+		return nil, fmt.Errorf("failed to parse PEM block containing the public key")
+	}
+
+	// 尝试 PKCS1 格式解析
+	pub, err := x509.ParsePKCS1PublicKey(block.Bytes)
+	if err == nil {
+		return pub, nil
+	}
+
+	// 如果 PKCS1 解析失败，尝试 PKCS8 格式解析
+	pubInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse public key: %v", err)
+	}
+
+	pub, ok := pubInterface.(*rsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("public key is not RSA")
+	}
+
+	return pub, nil
 }

@@ -570,12 +570,12 @@ func UpdateBuilder(opts ...Option) (sql string, args []any) {
 	for _, v := range opts {
 		v(_opts)
 	}
-	var _val []string
-	for _, v := range _opts.field {
-		_val = append(_val, v+" = ?")
+	var _set []string
+	for i, v := range _opts.field {
+		_set = append(_set, parseSet(v, _opts.value[i]))
 	}
-	sql = fmt.Sprintf(updateMod, getTable(_opts), strings.Join(_val, ","))
-	args = _opts.value
+	sql = fmt.Sprintf(updateMod, getTable(_opts), strings.Join(_set, ","))
+	args = parseSetValues(_opts.value)
 	if len(_opts.where) > 0 {
 		_where, _args := whereBuilder(_opts.where)
 		sql = sql + " where " + _where
@@ -596,4 +596,51 @@ func DeleteBuilder(opts ...Option) (sql string, args []any) {
 		args = append(args, _args...)
 	}
 	return sql, args
+}
+
+// insert or update value
+const (
+	OpAdd = "+"
+	OpSub = "-"
+)
+
+type UpdateValue struct {
+	Value interface{}
+	Op    string // 操作符：+, -
+}
+
+func SelfAdd(value any) UpdateValue {
+	return UpdateValue{Value: value, Op: OpAdd}
+}
+
+func SelfSub(value any) UpdateValue {
+	return UpdateValue{Value: value, Op: OpSub}
+}
+
+func parseSet(field string, value any) string {
+	if uv, ok := value.(UpdateValue); ok {
+		switch uv.Op {
+		case OpAdd:
+			return fmt.Sprintf("%s = %s + ?", field, field)
+		case OpSub:
+			return fmt.Sprintf("%s = %s - ?", field, field)
+		}
+	}
+	return fmt.Sprintf("%s = ?", field)
+}
+
+func parseSetValues(values []any) []any {
+	for i, v := range values {
+		if uv, ok := v.(UpdateValue); ok {
+			values[i] = uv.Value
+		}
+	}
+	return values
+}
+
+func parseSetValue(value any) any {
+	if uv, ok := value.(UpdateValue); ok {
+		return uv.Value
+	}
+	return value
 }
