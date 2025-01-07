@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/caarlos0/env"
+	"github.com/caarlos0/env/v11"
 	"github.com/daodao97/xgo/xlog"
 	"github.com/daodao97/xgo/xutil"
 	"github.com/fsnotify/fsnotify"

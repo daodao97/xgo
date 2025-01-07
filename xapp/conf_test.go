@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/caarlos0/env/v11"
 	"github.com/daodao97/xgo/xredis"
 )
 
@@ -21,9 +20,9 @@ func TestInitConf(t *testing.T) {
 	os.Setenv("REDIS_0_PASSWORD", "123456")
 	os.Setenv("REDIS_0_DB", "0")
 
-	// InitConf(&conf)
+	InitConf(&conf)
 
-	env.Parse(&conf)
+	// env.Parse(&conf)
 
 	fmt.Println(conf)
 	for {
