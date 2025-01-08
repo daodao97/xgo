@@ -435,9 +435,9 @@ func (r *Request) prepareBody() (io.Reader, error) {
 	}
 
 	if r.body != nil {
-		// if _, exists := r.headers["Content-Type"]; !exists {
-		// 	r.headers["Content-Type"] = "application/json"
-		// }
+		if _, exists := r.headers["Content-Type"]; !exists {
+			r.headers["Content-Type"] = "application/json"
+		}
 		switch v := r.body.(type) {
 		case string:
 			return strings.NewReader(v), nil
