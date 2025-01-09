@@ -23,7 +23,7 @@ type BeforeDeleteHook func(r *http.Request, opt []xdb.Option) []xdb.Option
 type AfterDeleteHook func(r *http.Request, id int64)
 type BeforeListHook func(r *http.Request, opt []xdb.Option) []xdb.Option
 type AfterListHook func(r *http.Request, list []xdb.Record) []xdb.Record
-
+type SchemaHook func(r *http.Request, schema string) string
 type Crud struct {
 	Schema       string
 	NewModel     func(r *http.Request) xdb.Model // 创建自定义 model
@@ -37,6 +37,7 @@ type Crud struct {
 	AfterDelete  AfterDeleteHook
 	BeforeList   BeforeListHook
 	AfterList    AfterListHook
+	SchemaHook   SchemaHook
 }
 
 func (r Crud) GetSchema() any {
@@ -86,6 +87,18 @@ func InitSchema(schema embed.FS) {
 
 	if err != nil {
 		xlog.Error("Failed to walk through schema directory: %v", err)
+	}
+}
+
+func RegSchemaHook(collection string, fn SchemaHook) {
+	rule, ok := Cruds[collection]
+	if ok {
+		rule.SchemaHook = fn
+		Cruds[collection] = rule
+	} else {
+		Cruds[collection] = Crud{
+			SchemaHook: fn,
+		}
 	}
 }
 

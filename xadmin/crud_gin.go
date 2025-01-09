@@ -23,6 +23,11 @@ func GinPageSchema(c *gin.Context) {
 		return
 	}
 
+	if schema.SchemaHook != nil {
+		newSchema := schema.SchemaHook(c.Request, schema.Schema)
+		schema.Schema = newSchema
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"msg":  "success",
