@@ -292,7 +292,7 @@ func (r *Request) do() (*Response, error) {
 	}
 
 	_resp := NewResponse(resp)
-	if len(debugInfo) > 0 {
+	if r.debug && len(debugInfo) > 0 {
 		debugInfo = append([]string{"-------request curl command start-------"}, debugInfo...)
 		debugInfo = append(debugInfo, fmt.Sprintf("response status: %d", resp.StatusCode))
 
