@@ -2,6 +2,7 @@ package xutil
 
 import (
 	"context"
+	"runtime/debug"
 
 	"github.com/daodao97/xgo/xlog"
 )
@@ -10,7 +11,11 @@ func Go(ctx context.Context, fn func()) {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				xlog.ErrorCtx(ctx, "safe go", xlog.Any("error", err))
+				stack := debug.Stack()
+				xlog.ErrorCtx(ctx, "safe go",
+					xlog.Any("error", err),
+					xlog.String("stack", string(stack)),
+				)
 			}
 		}()
 		fn()
