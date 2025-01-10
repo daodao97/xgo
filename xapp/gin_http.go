@@ -167,6 +167,12 @@ func NewGinHttpServer(addr string, engine func() *gin.Engine) NewServer {
 	}
 }
 
+var SuccessCode = 0
+
+func SetSuccessCode(code int) {
+	SuccessCode = code
+}
+
 func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error)) func(*gin.Context) {
 	return func(c *gin.Context) {
 		var req Req
@@ -204,7 +210,7 @@ func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error
 		}
 
 		body := gin.H{
-			"code":    0,
+			"code":    SuccessCode,
 			"message": "success",
 		}
 
