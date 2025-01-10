@@ -281,9 +281,9 @@ func (r *Request) do() (*Response, error) {
 	}
 
 	if err != nil {
-		logFunc = xlog.ErrorCtx
+		logFunc = xlog.WarnCtx
 		args = append(args, xlog.Any("error", err))
-		logFunc(ctx, "xrequest", args...)
+		logFunc(ctx, "xrequest request error", args...)
 		return nil, NewRequestError("请求失败", err)
 	}
 
