@@ -283,7 +283,7 @@ func (r *Request) do() (*Response, error) {
 	if err != nil {
 		logFunc = xlog.WarnCtx
 		args = append(args, xlog.Any("error", err))
-		logFunc(ctx, "xrequest request error", args...)
+		logFunc(ctx, "xrequest network error", args...)
 		return nil, NewRequestError("请求失败", err)
 	}
 
@@ -309,8 +309,8 @@ func (r *Request) do() (*Response, error) {
 	}
 
 	if _resp.Error() != nil {
-		logFunc = xlog.ErrorCtx
-		args = append(args, xlog.Any("error", _resp.Error()))
+		logFunc = xlog.WarnCtx
+		args = append(args, xlog.Any("error", _resp.Error()), xlog.String("response", _resp.String()))
 	}
 
 	logFunc(ctx, "xrequest", args...)
