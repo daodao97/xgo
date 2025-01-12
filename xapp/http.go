@@ -43,7 +43,7 @@ func (s *HTTPServer) Start() error {
 
 func (s *HTTPServer) Stop() {
 	xlog.Debug("Stopping HTTP server")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
 	if err := s.server.Shutdown(ctx); err != nil {
