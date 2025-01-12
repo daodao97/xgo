@@ -42,13 +42,21 @@ func (s *HTTPServer) Start() error {
 
 func (s *HTTPServer) Stop() {
 	xlog.Debug("Stopping HTTP server")
-	ctx, cancel := context.WithTimeout(context.Background(), 360*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := s.server.Shutdown(ctx); err != nil {
-		xlog.Error("HTTP server Shutdown", xlog.Err(err), xlog.Duration("timeout", 360*time.Second))
+		if err == context.DeadlineExceeded {
+			xlog.Warn("HTTP server graceful shutdown timed out, forcing close",
+				xlog.Duration("timeout", 30*time.Second))
+			if err := s.server.Close(); err != nil {
+				xlog.Error("HTTP server force close failed", xlog.Err(err))
+			}
+		} else {
+			xlog.Error("HTTP server shutdown error", xlog.Err(err))
+		}
 	} else {
-		xlog.Debug("HTTP server Shutdown completed successfully")
+		xlog.Debug("HTTP server shutdown completed successfully")
 	}
 
 	xlog.Debug("Stop HTTP server done")

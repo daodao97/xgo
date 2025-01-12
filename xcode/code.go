@@ -24,6 +24,10 @@ func (c *Code) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// func (c *Code) MarshalJSON() ([]byte, error) {
+// 	return json.Marshal(c)
+// }
+
 func (c *Code) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, c)
 }

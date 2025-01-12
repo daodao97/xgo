@@ -19,14 +19,17 @@ import (
 	"github.com/daodao97/xgo/triceid"
 	"github.com/daodao97/xgo/utils"
 	"github.com/daodao97/xgo/xlog"
+	"github.com/daodao97/xgo/xutil"
 )
 
 type SlogWriter struct {
-	logger *slog.Logger
 }
 
 func (w SlogWriter) Write(p []byte) (n int, err error) {
-	w.logger.Info(string(p))
+	if strings.Contains(string(p), "[Recovery]") {
+		return 0, nil
+	}
+	xlog.Info("gin log", xlog.String("info", string(p)))
 	return len(p), nil
 }
 
@@ -51,7 +54,7 @@ func NewGin() *gin.Engine {
 		}, decimal.Decimal{})
 	}
 
-	logger := SlogWriter{logger: xlog.GetLogger()}
+	logger := SlogWriter{}
 	gin.DefaultWriter = logger
 	gin.DefaultErrorWriter = logger
 	gin.DebugPrintRouteFunc = func(httpMethod, absolutePath, handlerName string, nuHandlers int) {
@@ -69,7 +72,25 @@ func NewGin() *gin.Engine {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.New()
-	r.Use(gin.Recovery())
+	// r.Use(gin.Recovery())
+	r.Use(gin.CustomRecovery(func(c *gin.Context, err any) {
+		path := c.Request.URL.Path
+		query := c.Request.URL.RawQuery
+
+		xlog.ErrorC(c, "panic recovered",
+			xlog.Time("time", time.Now()),
+			xlog.String("path", path),
+			xlog.String("query", query),
+			xlog.Any("error", err),
+			// 可选：添加堆栈信息
+			xlog.String("stack", string(xutil.Stack(3))),
+		)
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "internal server error",
+		})
+	}))
 	r.Use(triceid.TraceId())
 	r.Use(func(c *gin.Context) {
 		// 开始时间
