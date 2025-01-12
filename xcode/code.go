@@ -15,7 +15,13 @@ func (c *Code) Error() string {
 }
 
 func (c *Code) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c)
+	// 创建一个新的结构体来序列化,避免递归
+	type Alias Code
+	return json.Marshal(&struct {
+		*Alias
+	}{
+		Alias: (*Alias)(c),
+	})
 }
 
 func (c *Code) UnmarshalJSON(data []byte) error {
