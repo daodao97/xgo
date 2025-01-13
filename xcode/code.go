@@ -1,6 +1,9 @@
 package xcode
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type Code struct {
 	Code     int    `json:"code"`
@@ -11,7 +14,7 @@ type Code struct {
 }
 
 func (c *Code) Error() string {
-	return c.Message
+	return fmt.Sprintf("code: %d, http_code: %d, message: %s, type: %s, err: %v", c.Code, c.HttpCode, c.Message, c.Type, c.Err)
 }
 
 func (c *Code) MarshalJSON() ([]byte, error) {
