@@ -21,3 +21,12 @@ func Go(ctx context.Context, fn func()) {
 		fn()
 	}()
 }
+
+func GoWithCancel(ctx context.Context, fn func(c context.Context)) context.CancelFunc {
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		defer cancel()
+		fn(ctx)
+	}()
+	return cancel
+}
