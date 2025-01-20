@@ -586,6 +586,11 @@ func (m *model) InsertOrUpdate(record Record, updateFields ...string) (affected 
 		return 0, errors.New("空记录无法插入或更新")
 	}
 
+	record, err = m.hookInput(record)
+	if err != nil {
+		return 0, err
+	}
+
 	// 准备插入的字段和值
 	var fields []string
 	var values []any

@@ -44,8 +44,13 @@ func fileConf(dest any, files ...string) error {
 				continue
 			}
 
+			absFile, err := filepath.Abs(filepath.Join(dir, file))
+			if err != nil {
+				return fmt.Errorf("获取绝对路径失败 %s: %v", file, err)
+			}
+
 			// 读取文件内容
-			data, err := os.ReadFile(file)
+			data, err := os.ReadFile(absFile)
 			if err != nil {
 				return fmt.Errorf("读取配置文件失败 %s: %v", file, err)
 			}

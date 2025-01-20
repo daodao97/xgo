@@ -27,10 +27,11 @@ type DbPool struct {
 func Inits(conns []Config) error {
 	var connMap = make(map[string]*Config)
 	for _, conf := range conns {
+		_conf := conf
 		if conf.Name == "" {
 			return errors.New("connection name is empty")
 		}
-		connMap[conf.Name] = &conf
+		connMap[conf.Name] = &_conf
 	}
 	return Init(connMap)
 }

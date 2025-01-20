@@ -66,6 +66,21 @@ func (r Record) GetTime(key string) *time.Time {
 		return &value
 	}
 
+	// 尝试解析多种时间格式
+	formats := []string{
+		time.DateTime,
+		time.RFC3339, // 支持带时区的格式 如 "2029-07-17T18:18:44+08:00"
+		"2006-01-02 15:04:05",
+		"2006-01-02",
+	}
+
+	strVal := cast.ToString(v)
+	for _, format := range formats {
+		if t, err := time.Parse(format, strVal); err == nil {
+			return &t
+		}
+	}
+
 	return nil
 }
 

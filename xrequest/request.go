@@ -253,6 +253,8 @@ func (r *Request) do() (*Response, error) {
 	if _curl, err = GetCurlCommand(req); err == nil {
 		debugInfo = append(debugInfo, _curl.String())
 		_curlString = _curl.String()
+	} else {
+		xlog.WarnCtx(ctx, "getCurlCommand error", xlog.Any("error", err))
 	}
 
 	client := r.client
@@ -403,6 +405,12 @@ func (r *Request) prepareBody() (io.Reader, error) {
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
 
+		// 设置 Content-Type header 和 boundary
+		if _, exists := r.headers["Content-Type"]; !exists {
+			r.headers["Content-Type"] = writer.FormDataContentType()
+		}
+
+		// 处理文件上传
 		for _, files := range r.files {
 			for _, file := range files {
 				part, err := writer.CreateFormFile(file.FieldName, file.FileName)
@@ -416,7 +424,7 @@ func (r *Request) prepareBody() (io.Reader, error) {
 			}
 		}
 
-		// 添加其他表单数据
+		// 处理其他表单数据
 		if r.formData != nil {
 			for key, value := range r.formData {
 				err := writer.WriteField(key, fmt.Sprintf("%v", value))
