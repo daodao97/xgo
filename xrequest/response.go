@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/daodao97/xgo/xcode"
 	"github.com/daodao97/xgo/xjson"
 )
 
@@ -93,7 +94,11 @@ func (r *Response) Headers() http.Header {
 
 func (r *Response) SSE() (chan string, error) {
 	if !strings.Contains(r.RawResponse.Header.Get("Content-Type"), "text/event-stream") {
-		return nil, fmt.Errorf("response is not an SSE")
+		return nil, &xcode.Code{
+			HttpCode: http.StatusBadRequest,
+			Message:  r.String(),
+			Type:     "error",
+		}
 	}
 	messages := make(chan string)
 
