@@ -110,11 +110,13 @@ func (r *Response) SSE() (chan string, error) {
 				return
 			}
 
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "data: ") {
-				data := strings.TrimPrefix(line, "data: ")
-				messages <- data
-			}
+			messages <- line
+
+			// line = strings.TrimSpace(line)
+			// if strings.HasPrefix(line, "data: ") {
+			// 	data := strings.TrimPrefix(line, "data: ")
+			// 	messages <- data
+			// }
 		}
 	}()
 
@@ -125,9 +127,9 @@ func (r *Response) Stream() (chan string, error) {
 	return r.SSE()
 }
 
-type StreamHook func(data []byte) (flush bool, newData []byte)
+type ResponseHook func(data []byte) (flush bool, newData []byte)
 
-func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...StreamHook) {
+func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...ResponseHook) {
 	w.WriteHeader(r.statusCode)
 	for k, v := range r.RawResponse.Header {
 		w.Header()[k] = v
@@ -170,11 +172,21 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...StreamHo
 	}
 
 	if r.parsed {
+		for _, f := range hooks {
+			_, r.body = f(r.body)
+		}
 		if _, err := w.Write(r.body); err != nil {
 			http.Error(w, fmt.Sprintf("Error writing response: %v", err), http.StatusInternalServerError)
 			return
 		}
 	} else {
+		if len(hooks) > 0 {
+			body, _ := io.ReadAll(r.RawResponse.Body)
+			for _, f := range hooks {
+				_, body = f(body)
+			}
+			r.RawResponse.Body = io.NopCloser(bytes.NewBuffer(body))
+		}
 		if _, err := io.Copy(w, r.RawResponse.Body); err != nil {
 			http.Error(w, fmt.Sprintf("Error copying response: %v", err), http.StatusInternalServerError)
 			return
