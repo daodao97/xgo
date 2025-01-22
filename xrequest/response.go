@@ -116,6 +116,8 @@ func (r *Response) SSE() (chan string, error) {
 			// if strings.HasPrefix(line, "data: ") {
 			// 	data := strings.TrimPrefix(line, "data: ")
 			// 	messages <- data
+			// } else {
+			// 	messages <- line
 			// }
 		}
 	}()
