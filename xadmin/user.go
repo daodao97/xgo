@@ -3,6 +3,7 @@ package xadmin
 import (
 	_ "embed"
 	"net/http"
+	"os"
 
 	"github.com/golang-jwt/jwt/v5"
 
@@ -143,7 +144,7 @@ func infoHandler(w http.ResponseWriter, r *http.Request) {
 			"id":       1,
 			"name":     payload["username"].(string),
 			"resource": nil,
-			"env":      "prod",
+			"env":      os.Getenv("APP_ENV"),
 			"website":  website,
 		},
 	})

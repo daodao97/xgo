@@ -511,12 +511,12 @@ func SelectBuilder(opts ...Option) (sql string, args []any) {
 		sql = sql + " where " + _where
 	}
 
-	if len(_opts.orderBy) > 0 {
-		sql = sql + " order by " + strings.Join(_opts.orderBy, ", ")
-	}
-
 	if _opts.groupBy != "" {
 		sql = sql + " group by " + _opts.groupBy
+	}
+
+	if len(_opts.orderBy) > 0 {
+		sql = sql + " order by " + strings.Join(_opts.orderBy, ", ")
 	}
 
 	if _opts.limit != 0 {
