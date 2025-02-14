@@ -269,6 +269,9 @@ func (m *model) Page(page int, size int, opt ...Option) (int64, []Record, error)
 
 	selectOpt := append(opt, Limit(size), Offset((page-1)*size))
 	records, err := m.Selects(selectOpt...)
+	if errors.Is(err, ErrNotFound) {
+		return 0, []Record{}, nil
+	}
 	if err != nil {
 		return 0, nil, err
 	}
