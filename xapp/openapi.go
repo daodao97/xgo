@@ -439,6 +439,10 @@ func RegisterAPI[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, erro
 				funcName := handlerFunc.Name()
 				shortFuncName := funcName[strings.LastIndex(funcName, ".")+1:]
 				lineNumber := findFunctionDefinition(lines, shortFuncName)
+				// fmt.Println("funcName", funcName)
+				// fmt.Println("shortFuncName", shortFuncName)
+				// fmt.Println("lineNumber", lineNumber)
+				// fmt.Println("fileName", fileName)
 
 				var comments []string
 				for i := lineNumber - 2; i >= 0; i-- {
@@ -474,8 +478,7 @@ func RegisterAPI[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, erro
 func findFunctionDefinition(lines []string, funcName string) int {
 	for i, line := range lines {
 		// 查找函数定义的模式
-		if strings.Contains(line, "func "+funcName) ||
-			strings.Contains(line, "func(") {
+		if strings.Contains(line, "func "+funcName) {
 			return i + 1
 		}
 	}
