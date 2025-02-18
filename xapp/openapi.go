@@ -140,6 +140,7 @@ type Operation struct {
 	Tags        []string            `json:"tags,omitempty"`
 	Summary     string              `json:"summary"`
 	Description string              `json:"description"`
+	Deprecated  bool                `json:"deprecated,omitempty"`
 	Parameters  []Parameter         `json:"parameters,omitempty"`
 	RequestBody *RequestBody        `json:"requestBody,omitempty"`
 	Responses   map[string]Response `json:"responses"`
@@ -390,6 +391,10 @@ type APIInfo struct {
 	Handler      gin.HandlerFunc
 	Summary      string
 	Description  string
+	Tags         []string
+	Deprecated   bool
+	Accept       string
+	Produce      string
 }
 
 func CollectRouteInfo(engine *gin.Engine) {
@@ -423,7 +428,7 @@ func RegisterAPI[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, erro
 		if handlerFunc == nil {
 			xlog.Error("无法获取handler函数信息")
 		} else {
-			fileName, lineNumber := handlerFunc.FileLine(handlerPtr)
+			fileName, _ := handlerFunc.FileLine(handlerPtr)
 			// fmt.Printf("Handler函数位置: %s:%d\n", fileName, lineNumber)
 
 			fileContent, err := os.ReadFile(fileName)
@@ -431,7 +436,9 @@ func RegisterAPI[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, erro
 				xlog.Error("read file error", xlog.Err(err))
 			} else {
 				lines := strings.Split(string(fileContent), "\n")
-				// fmt.Printf("文件总行数: %d\n", len(lines))
+				funcName := handlerFunc.Name()
+				shortFuncName := funcName[strings.LastIndex(funcName, ".")+1:]
+				lineNumber := findFunctionDefinition(lines, shortFuncName)
 
 				var comments []string
 				for i := lineNumber - 2; i >= 0; i-- {
@@ -443,15 +450,19 @@ func RegisterAPI[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, erro
 					}
 				}
 
-				summary, description := parseComments(strings.Join(comments, "\n"))
-				// fmt.Printf("提取的注释: summary=%s, description=%s\n", summary, description)
+				commentResult := parseComments(strings.Join(comments, "\n"))
+				// fmt.Printf("提取的注释: summary=%s, description=%s\n", commentResult.Summary, commentResult.Description)
 
 				apiRegistry = append(apiRegistry, APIInfo{
 					RequestType:  reqType,
 					ResponseType: respType,
 					Handler:      wrappedHandler,
-					Summary:      summary,
-					Description:  description,
+					Summary:      commentResult.Summary,
+					Description:  commentResult.Description,
+					Tags:         commentResult.Tags,
+					Deprecated:   commentResult.Deprecated,
+					Accept:       commentResult.Accept,
+					Produce:      commentResult.Produce,
 				})
 			}
 		}
@@ -460,17 +471,49 @@ func RegisterAPI[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, erro
 	return wrappedHandler
 }
 
-func parseComments(comments string) (summary, description string) {
-	lines := strings.Split(comments, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "@summary") {
-			summary = strings.TrimSpace(strings.TrimPrefix(line, "@summary"))
-		} else if strings.HasPrefix(line, "@description") {
-			description = strings.TrimSpace(strings.TrimPrefix(line, "@description"))
+func findFunctionDefinition(lines []string, funcName string) int {
+	for i, line := range lines {
+		// 查找函数定义的模式
+		if strings.Contains(line, "func "+funcName) ||
+			strings.Contains(line, "func(") {
+			return i + 1
 		}
 	}
-	return
+	return 0
+}
+
+type APIComment struct {
+	Summary     string
+	Description string
+	Tags        []string
+	Deprecated  bool
+	Accept      string
+	Produce     string
+}
+
+func parseComments(comments string) APIComment {
+	result := APIComment{}
+	lines := strings.Split(comments, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "@summary"):
+			result.Summary = strings.TrimSpace(strings.TrimPrefix(line, "@summary"))
+		case strings.HasPrefix(line, "@description"):
+			result.Description = strings.TrimSpace(strings.TrimPrefix(line, "@description"))
+		case strings.HasPrefix(line, "@tags"):
+			tags := strings.TrimSpace(strings.TrimPrefix(line, "@tags"))
+			result.Tags = strings.Split(tags, ",")
+		case strings.HasPrefix(line, "@deprecated"):
+			result.Deprecated = true
+		case strings.HasPrefix(line, "@accept"):
+			result.Accept = strings.TrimSpace(strings.TrimPrefix(line, "@accept"))
+		case strings.HasPrefix(line, "@produce"):
+			result.Produce = strings.TrimSpace(strings.TrimPrefix(line, "@produce"))
+		}
+	}
+	return result
 }
 
 func GenerateOpenAPIDoc(engine *gin.Engine, options ...OpenAPIOption) ([]byte, error) {
@@ -576,7 +619,10 @@ func genDoc(engine *gin.Engine, options ...OpenAPIOption) (OpenAPIDocument, erro
 		path, pathParams := parsePathParameters(api.Path)
 
 		// 根据路径前缀生成标签
-		tags := generateTags(path)
+		tags := api.Tags
+		if len(tags) == 0 {
+			tags = generateTags(path)
+		}
 
 		pathItem, ok := doc.Paths[path]
 		if !ok {
@@ -587,6 +633,7 @@ func genDoc(engine *gin.Engine, options ...OpenAPIOption) (OpenAPIDocument, erro
 			Tags:        tags,
 			Summary:     api.Summary,
 			Description: api.Description,
+			Deprecated:  api.Deprecated,
 			Responses: map[string]Response{
 				"200": {
 					Description: "Successful response",
@@ -597,6 +644,30 @@ func genDoc(engine *gin.Engine, options ...OpenAPIOption) (OpenAPIDocument, erro
 					},
 				},
 			},
+		}
+
+		// 设置请求内容类型
+		if api.Accept != "" {
+			if operation.RequestBody != nil {
+				newContent := make(map[string]MediaType)
+				for _, acceptType := range strings.Split(api.Accept, ",") {
+					acceptType = strings.TrimSpace(acceptType)
+					newContent[acceptType] = operation.RequestBody.Content["application/json"]
+				}
+				operation.RequestBody.Content = newContent
+			}
+		}
+
+		// 设置响应内容类型
+		if api.Produce != "" {
+			resp := operation.Responses["200"]
+			newContent := make(map[string]MediaType)
+			for _, produceType := range strings.Split(api.Produce, ",") {
+				produceType = strings.TrimSpace(produceType)
+				newContent[produceType] = resp.Content["application/json"]
+			}
+			resp.Content = newContent
+			operation.Responses["200"] = resp
 		}
 
 		// 添加路径参数
