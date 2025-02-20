@@ -370,7 +370,7 @@ func generateDescription(field reflect.StructField) string {
 			case rule == "omitempty":
 				desc = append(desc, "非必须")
 			case strings.HasPrefix(rule, "oneof="):
-				desc = append(desc, fmt.Sprintf("枚举值: %s", strings.TrimPrefix(rule, "oneof=")))
+				desc = append(desc, fmt.Sprintf("枚举值: %s", strings.ReplaceAll(strings.TrimPrefix(rule, "oneof="), " ", ", ")))
 			}
 		}
 	}
