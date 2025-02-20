@@ -299,17 +299,17 @@ func generateDescription(field reflect.StructField) string {
 				desc = append(desc, fmt.Sprintf("长度必须为 %s", strings.TrimPrefix(rule, "len=")))
 			case strings.HasPrefix(rule, "oneof="):
 				desc = append(desc, fmt.Sprintf("枚举值: %s", strings.TrimPrefix(rule, "oneof=")))
-			case rule == "eq":
+			case strings.HasPrefix(rule, "eq="):
 				desc = append(desc, fmt.Sprintf("必须等于 %s", strings.TrimPrefix(rule, "eq=")))
-			case rule == "ne":
+			case strings.HasPrefix(rule, "ne="):
 				desc = append(desc, fmt.Sprintf("不能等于 %s", strings.TrimPrefix(rule, "ne=")))
-			case rule == "lt":
+			case strings.HasPrefix(rule, "lt="):
 				desc = append(desc, fmt.Sprintf("必须小于 %s", strings.TrimPrefix(rule, "lt=")))
-			case rule == "lte":
+			case strings.HasPrefix(rule, "lte="):
 				desc = append(desc, fmt.Sprintf("必须小于或等于 %s", strings.TrimPrefix(rule, "lte=")))
-			case rule == "gt":
+			case strings.HasPrefix(rule, "gt="):
 				desc = append(desc, fmt.Sprintf("必须大于 %s", strings.TrimPrefix(rule, "gt=")))
-			case rule == "gte":
+			case strings.HasPrefix(rule, "gte="):
 				desc = append(desc, fmt.Sprintf("必须大于或等于 %s", strings.TrimPrefix(rule, "gte=")))
 			case rule == "alpha":
 				desc = append(desc, "只能包含字母")
@@ -369,7 +369,7 @@ func generateDescription(field reflect.StructField) string {
 				desc = append(desc, "必须是有效的日期时间")
 			case rule == "omitempty":
 				desc = append(desc, "非必须")
-			case rule == "oneof":
+			case strings.HasPrefix(rule, "oneof="):
 				desc = append(desc, fmt.Sprintf("枚举值: %s", strings.TrimPrefix(rule, "oneof=")))
 			}
 		}
