@@ -369,6 +369,8 @@ func generateDescription(field reflect.StructField) string {
 				desc = append(desc, "必须是有效的日期时间")
 			case rule == "omitempty":
 				desc = append(desc, "非必须")
+			case rule == "oneof":
+				desc = append(desc, fmt.Sprintf("枚举值: %s", strings.TrimPrefix(rule, "oneof=")))
 			}
 		}
 	}
