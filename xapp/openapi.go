@@ -78,6 +78,7 @@ type OpenAPIDocument struct {
 }
 
 type Components struct {
+	Schemas         map[string]Schema         `json:"schemas,omitempty"`
 	SecuritySchemes map[string]SecurityScheme `json:"securitySchemes,omitempty"`
 }
 
@@ -101,11 +102,12 @@ func WithServer(url, description string) OpenAPIOption {
 	}
 }
 
-func WithInfo(title, version string) OpenAPIOption {
+func WithInfo(title, version, description string) OpenAPIOption {
 	return func(doc *OpenAPIDocument) {
 		doc.Info = OpenAPIInfo{
-			Title:   title,
-			Version: version,
+			Title:       title,
+			Version:     version,
+			Description: description,
 		}
 	}
 }
@@ -123,8 +125,9 @@ type ServerVariable struct {
 }
 
 type OpenAPIInfo struct {
-	Title   string `json:"title"`
-	Version string `json:"version"`
+	Title       string `json:"title"`
+	Version     string `json:"version"`
+	Description string `json:"description,omitempty"`
 }
 
 type PathItem struct {
@@ -181,6 +184,7 @@ type Schema struct {
 	MinLength            *int              `json:"minLength,omitempty"`
 	MaxLength            *int              `json:"maxLength,omitempty"`
 	Pattern              string            `json:"pattern,omitempty"`
+	Ref                  string            `json:"$ref,omitempty"`
 }
 
 func generateSchema(t reflect.Type) Schema {
@@ -603,6 +607,10 @@ func genDoc(engine *gin.Engine, options ...OpenAPIOption) (OpenAPIDocument, erro
 		},
 		Servers: []APIServer{},
 		Paths:   make(map[string]PathItem),
+		Components: &Components{
+			Schemas:         make(map[string]Schema),
+			SecuritySchemes: make(map[string]SecurityScheme),
+		},
 	}
 
 	for _, option := range options {
@@ -618,6 +626,14 @@ func genDoc(engine *gin.Engine, options ...OpenAPIOption) (OpenAPIDocument, erro
 	}
 
 	for _, api := range apiRegistry {
+		// 生成并注册请求和响应的 Schema
+		reqTypeName := getTypeName(api.RequestType)
+		respTypeName := getTypeName(api.ResponseType)
+
+		// 添加到 components.schemas
+		doc.Components.Schemas[reqTypeName] = generateSchema(api.RequestType)
+		doc.Components.Schemas[respTypeName] = generateSchema(api.ResponseType)
+
 		// 解析路径参数
 		path, pathParams := parsePathParameters(api.Path)
 
@@ -642,7 +658,9 @@ func genDoc(engine *gin.Engine, options ...OpenAPIOption) (OpenAPIDocument, erro
 					Description: "Successful response",
 					Content: map[string]MediaType{
 						"application/json": {
-							Schema: generateSchema(api.ResponseType),
+							Schema: Schema{
+								Ref: "#/components/schemas/" + respTypeName,
+							},
 						},
 					},
 				},
@@ -684,7 +702,9 @@ func genDoc(engine *gin.Engine, options ...OpenAPIOption) (OpenAPIDocument, erro
 			operation.RequestBody = &RequestBody{
 				Content: map[string]MediaType{
 					"application/json": {
-						Schema: generateSchema(api.RequestType),
+						Schema: Schema{
+							Ref: "#/components/schemas/" + reqTypeName,
+						},
 					},
 				},
 			}
@@ -770,4 +790,32 @@ func generateTags(path string) []string {
 		return []string{parts[0]}
 	}
 	return []string{"default"}
+}
+
+// 获取类型名称的辅助函数
+func getTypeName(t reflect.Type) string {
+	if t == nil {
+		return "void"
+	}
+
+	// 处理指针类型
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	// 获取包名和类型名
+	pkgPath := t.PkgPath()
+	name := t.Name()
+
+	// 如果是内置类型，直接返回类型名
+	if pkgPath == "" {
+		return name
+	}
+
+	// 获取包的最后一个部分
+	parts := strings.Split(pkgPath, "/")
+	pkgName := parts[len(parts)-1]
+
+	// 组合包名和类型名
+	return pkgName + "." + name
 }
