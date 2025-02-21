@@ -298,7 +298,7 @@ func generateDescription(field reflect.StructField) string {
 			case strings.HasPrefix(rule, "len="):
 				desc = append(desc, fmt.Sprintf("长度必须为 %s", strings.TrimPrefix(rule, "len=")))
 			case strings.HasPrefix(rule, "oneof="):
-				desc = append(desc, fmt.Sprintf("枚举值: %s", strings.TrimPrefix(rule, "oneof=")))
+				desc = append(desc, fmt.Sprintf("枚举值: %s", strings.ReplaceAll(strings.TrimPrefix(rule, "oneof="), " ", ", ")))
 			case strings.HasPrefix(rule, "eq="):
 				desc = append(desc, fmt.Sprintf("必须等于 %s", strings.TrimPrefix(rule, "eq=")))
 			case strings.HasPrefix(rule, "ne="):
@@ -369,8 +369,6 @@ func generateDescription(field reflect.StructField) string {
 				desc = append(desc, "必须是有效的日期时间")
 			case rule == "omitempty":
 				desc = append(desc, "非必须")
-			case strings.HasPrefix(rule, "oneof="):
-				desc = append(desc, fmt.Sprintf("枚举值: %s", strings.ReplaceAll(strings.TrimPrefix(rule, "oneof="), " ", ", ")))
 			}
 		}
 	}
