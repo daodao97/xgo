@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -194,21 +195,68 @@ func SetSuccessCode(code int) {
 	SuccessCode = code
 }
 
+var MaxMultipartFormSize int64 = 32 << 20 // 32MB
+
+func SetMaxMultipartFormSize(size int64) {
+	MaxMultipartFormSize = size
+}
+
+type FileUploadRequest struct {
+	Name  string                  `form:"name"`
+	File  *multipart.FileHeader   `form:"file"`  // 单文件
+	Files []*multipart.FileHeader `form:"files"` // 多文件
+}
+
 func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error)) func(*gin.Context) {
 	return func(c *gin.Context) {
 		var req Req
 		// 首先设置默认值
 		setDefaultValues(&req)
 
-		c.ShouldBindUri(&req)
-		c.ShouldBindQuery(&req)
-		err3 := c.ShouldBind(&req)
-		if err3 != nil {
-			c.JSON(200, gin.H{
-				"code":    400,
-				"message": translateError(err3),
-			})
-			return
+		// 检查是否为文件上传请求
+		contentType := c.GetHeader("Content-Type")
+		isMultipart := strings.HasPrefix(contentType, "multipart/form-data")
+
+		// 如果是文件上传请求，先处理文件
+		if isMultipart {
+			if err := c.Request.ParseMultipartForm(MaxMultipartFormSize); err != nil {
+				c.JSON(200, gin.H{
+					"code":    400,
+					"message": "文件上传失败: " + err.Error(),
+				})
+				return
+			}
+			// 对于文件上传请求，直接使用 ShouldBind
+			if err := c.ShouldBind(&req); err != nil {
+				c.JSON(200, gin.H{
+					"code":    400,
+					"message": translateError(err),
+				})
+				return
+			}
+		} else {
+			// 非文件上传请求，按顺序绑定 URI、Query 和 Body 参数
+			if err := c.ShouldBindUri(&req); err != nil {
+				c.JSON(200, gin.H{
+					"code":    400,
+					"message": translateError(err),
+				})
+				return
+			}
+			if err := c.ShouldBindQuery(&req); err != nil {
+				c.JSON(200, gin.H{
+					"code":    400,
+					"message": translateError(err),
+				})
+				return
+			}
+			if err := c.ShouldBind(&req); err != nil {
+				c.JSON(200, gin.H{
+					"code":    400,
+					"message": translateError(err),
+				})
+				return
+			}
 		}
 
 		if validator, ok := any(&req).(Validator); ok {
@@ -298,11 +346,17 @@ func getDefaultSetters(t reflect.Type) []defaultSetter {
 
 func setDefaultValues(obj any) {
 	v := reflect.ValueOf(obj)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
+	if v.Kind() != reflect.Ptr {
+		return
 	}
-	t := v.Type()
+	v = v.Elem()
 
+	// 检查是否为结构体类型
+	if v.Kind() != reflect.Struct {
+		return
+	}
+
+	t := v.Type()
 	setters := getDefaultSetters(t)
 	for _, setter := range setters {
 		field := v.Field(setter.fieldIndex)
