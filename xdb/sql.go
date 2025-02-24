@@ -577,6 +577,22 @@ func FieldsInWhere(opts ...Option) []string {
 	return fields
 }
 
+func UniqueString(str []string) []string {
+	// 使用 map 来去重
+	uniqueMap := make(map[string]struct{})
+	var result []string
+
+	// 遍历输入的字符串切片，将唯一的值添加到结果中
+	for _, s := range str {
+		if _, exists := uniqueMap[s]; !exists {
+			uniqueMap[s] = struct{}{}
+			result = append(result, s)
+		}
+	}
+
+	return result
+}
+
 func UpdateBuilder(opts ...Option) (sql string, args []any) {
 	_opts := &Options{}
 	for _, v := range opts {

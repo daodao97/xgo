@@ -213,6 +213,13 @@ func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error
 		// 首先设置默认值
 		setDefaultValues(&req)
 
+		// 保存请求体
+		var bodyBytes []byte
+		if c.Request.Body != nil {
+			bodyBytes, _ = io.ReadAll(c.Request.Body)
+			c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		}
+
 		// 检查是否为文件上传请求
 		contentType := c.GetHeader("Content-Type")
 		isMultipart := strings.HasPrefix(contentType, "multipart/form-data")
@@ -237,11 +244,11 @@ func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error
 		} else {
 			c.ShouldBindUri(&req)
 			c.ShouldBindQuery(&req)
-			err := c.ShouldBind(&req)
-			if err != nil {
+			err3 := c.ShouldBind(&req)
+			if err3 != nil {
 				c.JSON(200, gin.H{
 					"code":    400,
-					"message": translateError(err),
+					"message": translateError(err3),
 				})
 				return
 			}
