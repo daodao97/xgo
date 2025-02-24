@@ -565,6 +565,18 @@ func HaveFieldInWhere(field string, opts ...Option) (any, bool) {
 	return nil, false
 }
 
+func FieldsInWhere(opts ...Option) []string {
+	_opts := &Options{}
+	for _, v := range opts {
+		v(_opts)
+	}
+	var fields []string
+	for _, v := range _opts.where {
+		fields = append(fields, v.field)
+	}
+	return fields
+}
+
 func UpdateBuilder(opts ...Option) (sql string, args []any) {
 	_opts := &Options{}
 	for _, v := range opts {

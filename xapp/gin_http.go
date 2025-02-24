@@ -235,22 +235,10 @@ func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error
 				return
 			}
 		} else {
-			// 非文件上传请求，按顺序绑定 URI、Query 和 Body 参数
-			if err := c.ShouldBindUri(&req); err != nil {
-				c.JSON(200, gin.H{
-					"code":    400,
-					"message": translateError(err),
-				})
-				return
-			}
-			if err := c.ShouldBindQuery(&req); err != nil {
-				c.JSON(200, gin.H{
-					"code":    400,
-					"message": translateError(err),
-				})
-				return
-			}
-			if err := c.ShouldBind(&req); err != nil {
+			c.ShouldBindUri(&req)
+			c.ShouldBindQuery(&req)
+			err := c.ShouldBind(&req)
+			if err != nil {
 				c.JSON(200, gin.H{
 					"code":    400,
 					"message": translateError(err),

@@ -549,6 +549,8 @@ func (m *model) Update(record Record, opt ...Option) (ok bool, err error) {
 	}
 
 	cacheKey := append(m.cacheKey, m.primaryKey)
+	cacheKey = append(cacheKey, FieldsInWhere(opt...)...)
+
 	for _, k := range cacheKey {
 		val, ok := HaveFieldInWhere(k, opt...)
 		if ok && cache != nil {
@@ -717,6 +719,38 @@ func (m *model) Delete(opt ...Option) (ok bool, err error) {
 	if err != nil {
 		return false, err
 	}
+
+	cacheKey := append(m.cacheKey, m.primaryKey)
+	cacheKey = append(cacheKey, FieldsInWhere(opt...)...)
+
+	for _, k := range cacheKey {
+		val, ok := HaveFieldInWhere(k, opt...)
+		if ok && cache != nil {
+			// if update primary key, delete old cache
+			if k == m.primaryKey {
+				key := m.cacheKeyPrefix(cast.ToString(val))
+				err = cache.Del(context.Background(), key)
+				if err != nil {
+					xlog.ErrorC(m.ctx, "del key after update", xlog.Any(k, val), xlog.Err(err))
+				} else {
+					xlog.DebugC(m.ctx, "del key after update", xlog.Any(k, val))
+				}
+			} else {
+				// if update other field, delete cache by primary key
+				cachedPk, _ := cache.Get(context.Background(), m.cacheKeyPrefix(cast.ToString(val)))
+				if cachedPk != "" {
+					key := m.cacheKeyPrefix(cachedPk)
+					err = cache.Del(context.Background(), key)
+					if err != nil {
+						xlog.ErrorC(m.ctx, "del key after update", xlog.Any(k, val), xlog.Err(err))
+					} else {
+						xlog.DebugC(m.ctx, "del key after update", xlog.Any(k, val))
+					}
+				}
+			}
+		}
+	}
+
 	return effect > int64(0), nil
 }
 
