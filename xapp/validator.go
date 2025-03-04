@@ -3,6 +3,7 @@ package xapp
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
@@ -15,6 +16,7 @@ type Validator interface {
 func init() {
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		v.RegisterValidation("enum", validateEnum)
+		v.RegisterValidation("datetime_range", validateDateTimeRange)
 	}
 }
 
@@ -27,6 +29,32 @@ func validateEnum(fl validator.FieldLevel) bool {
 		}
 	}
 	return false
+}
+
+const timeFormat = "2006-01-02 15:04:05"
+
+func validateDateTimeRange(fl validator.FieldLevel) bool {
+	value := fl.Field().String()
+	if value == "" {
+		return true
+	}
+
+	parts := strings.Split(value, ",")
+	if len(parts) != 2 {
+		return false
+	}
+
+	startTime, err := time.Parse(timeFormat, strings.TrimSpace(parts[0]))
+	if err != nil {
+		return false
+	}
+
+	endTime, err := time.Parse(timeFormat, strings.TrimSpace(parts[1]))
+	if err != nil {
+		return false
+	}
+
+	return !endTime.Before(startTime)
 }
 
 // https://liuqh.icu/2021/05/30/go/gin/11-validate/
@@ -158,6 +186,8 @@ func translateError(err error) string {
 				errMsgs = append(errMsgs, fmt.Sprintf("%s 必须是有效的 IPv4 地址", e.Field()))
 			case "datetime":
 				errMsgs = append(errMsgs, fmt.Sprintf("%s 必须是有效的日期时间", e.Field()))
+			case "datetime_range":
+				errMsgs = append(errMsgs, fmt.Sprintf("%s 格式必须是 'YYYY-MM-DD HH:mm:ss,YYYY-MM-DD HH:mm:ss' 且结束时间必须大于开始时间", e.Field()))
 			default:
 				errMsgs = append(errMsgs, fmt.Sprintf("%s 字段验证失败", e.Field()))
 			}

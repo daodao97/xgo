@@ -373,6 +373,8 @@ func generateDescription(field reflect.StructField) string {
 				desc = append(desc, "必须是有效的日期时间")
 			case rule == "omitempty":
 				desc = append(desc, "非必须")
+			case rule == "datetime_range":
+				desc = append(desc, "格式必须是 'YYYY-MM-DD HH:mm:ss,YYYY-MM-DD HH:mm:ss' 且结束时间必须大于开始时间")
 			}
 		}
 	}
