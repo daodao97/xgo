@@ -226,7 +226,16 @@ func generateSchema(t reflect.Type) Schema {
 				if jsonTag == "-" {
 					continue // 跳过被标记为忽略的字段
 				}
-				fieldName := strings.Split(jsonTag, ",")[0]
+				tag := jsonTag
+				if tag == "" {
+					formTag := field.Tag.Get("form")
+					if formTag == "-" {
+						continue
+					}
+					tag = formTag
+				}
+				fieldName := strings.Split(tag, ",")[0]
+
 				if fieldName == "" {
 					fieldName = field.Name
 				}
