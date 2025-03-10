@@ -228,6 +228,13 @@ func generateSchema(t reflect.Type) Schema {
 				}
 				fieldName := strings.Split(jsonTag, ",")[0]
 				if fieldName == "" {
+					formTag := field.Tag.Get("form")
+					if formTag == "-" {
+						continue
+					}
+					fieldName = strings.Split(formTag, ",")[0]
+				}
+				if fieldName == "" {
 					fieldName = field.Name
 				}
 				fieldSchema := generateSchema(field.Type)
