@@ -62,7 +62,7 @@ func (v *Var) MapString() map[string]string {
 	m := v.Result.Map()
 	m2 := make(map[string]string)
 	for k, v := range m {
-		m2[k] = ToString(v.Raw)
+		m2[k] = v.String()
 	}
 	return m2
 }
