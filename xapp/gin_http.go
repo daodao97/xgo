@@ -273,6 +273,11 @@ func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error
 			return
 		}
 
+		isSSE := c.Writer.Header().Get("Content-Type") == "text/event-stream"
+		if isSSE {
+			return
+		}
+
 		body := gin.H{
 			"code":    SuccessCode,
 			"message": "success",
