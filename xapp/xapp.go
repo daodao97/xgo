@@ -112,12 +112,34 @@ func (a *App) Run() error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
+	var signalCount int
+	shutdownChan := make(chan struct{})
+
+	// 启动一个 goroutine 处理信号
+	go func() {
+		for sig := range sigChan {
+			signalCount++
+			if signalCount >= 2 {
+				xlog.Warn("received multiple signals, force exit",
+					xlog.Any("signal", sig),
+					xlog.Int("count", signalCount))
+				os.Exit(1) // 强制退出
+			}
+			xlog.Debug("received signal",
+				xlog.Any("signal", sig),
+				xlog.Int("count", signalCount))
+			if signalCount == 1 {
+				close(shutdownChan)
+			}
+		}
+	}()
+
 	// 等待错误或信号
 	select {
 	case err := <-errChan:
 		return fmt.Errorf("server error: %w", err)
-	case sig := <-sigChan:
-		xlog.Debug("received signal", xlog.Any("signal", sig))
+	case <-shutdownChan:
+		xlog.Debug("Starting graceful shutdown...")
 	case <-ctx.Done():
 		xlog.Warn("Context cancelled")
 	}
