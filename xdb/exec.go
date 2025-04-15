@@ -83,7 +83,7 @@ func queryTx(tx *sql.Tx, _sql string, args ...any) (result []Row, err error) {
 
 var needConvertPlaceholder = false
 
-// SetNeedConvertPlaceholder 设置是否需���将SQL语句中的?占位符按顺序替换为$1, $2, $3等
+// SetNeedConvertPlaceholder 设置是否需将SQL语句中的?占位符按顺序替换为$1, $2, $3等
 func SetNeedConvertPlaceholder(b bool) {
 	needConvertPlaceholder = b
 }
@@ -111,41 +111,66 @@ func convertPlaceholders(sql string) string {
 func destination(columnTypes []*sql.ColumnType) func() []any {
 	dest := make([]func() any, 0, len(columnTypes))
 	for _, v := range columnTypes {
+		nullable, _ := v.Nullable()
 		switch strings.ToUpper(v.DatabaseTypeName()) {
 		case "VARCHAR", "CHAR", "TEXT", "NVARCHAR", "LONGTEXT", "LONGBLOB", "MEDIUMTEXT", "MEDIUMBLOB", "BLOB", "TINYTEXT":
-			if nullable, _ := v.Nullable(); nullable {
+			dest = append(dest, func() any {
+				return new(sql.NullString)
+			})
+		case "UNSIGNED INT", "UNSIGNED TINYINT", "UNSIGNED INTEGER", "UNSIGNED SMALLINT", "UNSIGNED MEDIUMINT", "UNSIGNED TINYINTEGER":
+			if nullable {
 				dest = append(dest, func() any {
-					return new(sql.NullString)
+					return new(sql.NullInt64)
 				})
 			} else {
 				dest = append(dest, func() any {
-					return new(sql.NullString)
+					return new(uint)
 				})
 			}
-		case "UNSIGNED INT", "UNSIGNED TINYINT", "UNSIGNED INTEGER", "UNSIGNED SMALLINT", "UNSIGNED MEDIUMINT", "UNSIGNED TINYINTEGER":
-			dest = append(dest, func() any {
-				return new(uint)
-			})
 		case "UNSIGNED BIGINT":
-			dest = append(dest, func() any {
-				return new(uint64)
-			})
+			if nullable {
+				dest = append(dest, func() any {
+					return new(sql.NullInt64)
+				})
+			} else {
+				dest = append(dest, func() any {
+					return new(uint64)
+				})
+			}
 		case "INT", "INT8", "TINYINT", "INTEGER", "SMALLINT", "MEDIUMINT", "TINYINTEGER":
-			dest = append(dest, func() any {
-				return new(int)
-			})
+			if nullable {
+				dest = append(dest, func() any {
+					return new(sql.NullInt64)
+				})
+			} else {
+				dest = append(dest, func() any {
+					return new(int)
+				})
+			}
 		case "BIGINT":
-			dest = append(dest, func() any {
-				return new(int64)
-			})
+			if nullable {
+				dest = append(dest, func() any {
+					return new(sql.NullInt64)
+				})
+			} else {
+				dest = append(dest, func() any {
+					return new(int64)
+				})
+			}
 		case "DATETIME", "DATE", "TIMESTAMP", "TIME", "TIMESTAMPTZ":
 			dest = append(dest, func() any {
 				return new(sql.NullTime)
 			})
 		case "DOUBLE", "FLOAT":
-			dest = append(dest, func() any {
-				return new(float64)
-			})
+			if nullable {
+				dest = append(dest, func() any {
+					return new(sql.NullFloat64)
+				})
+			} else {
+				dest = append(dest, func() any {
+					return new(float64)
+				})
+			}
 		case "DECIMAL":
 			dest = append(dest, func() any {
 				return new(decimal.Decimal)
@@ -190,10 +215,40 @@ func rows2SliceMap(rows *sql.Rows) (list []Row, err error) {
 		for i := 0; i < length; i++ {
 			switch v := tmp[i].(type) {
 			case *sql.NullString:
-				row.Data[columns[i]] = v.String
+				if v.Valid {
+					row.Data[columns[i]] = v.String
+				} else {
+					row.Data[columns[i]] = nil
+				}
 			case *sql.NullTime:
 				if v.Valid {
 					row.Data[columns[i]] = v.Time
+				} else {
+					row.Data[columns[i]] = nil
+				}
+			case *sql.NullInt64:
+				if v.Valid {
+					// 根据原始列类型决定返回什么类型
+					typeName := strings.ToUpper(columnTypes[i].DatabaseTypeName())
+					if strings.HasPrefix(typeName, "UNSIGNED") {
+						if strings.Contains(typeName, "BIGINT") {
+							row.Data[columns[i]] = uint64(v.Int64)
+						} else {
+							row.Data[columns[i]] = uint(v.Int64)
+						}
+					} else {
+						if strings.Contains(typeName, "BIGINT") {
+							row.Data[columns[i]] = v.Int64
+						} else {
+							row.Data[columns[i]] = int(v.Int64)
+						}
+					}
+				} else {
+					row.Data[columns[i]] = nil
+				}
+			case *sql.NullFloat64:
+				if v.Valid {
+					row.Data[columns[i]] = v.Float64
 				} else {
 					row.Data[columns[i]] = nil
 				}
