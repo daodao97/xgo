@@ -112,10 +112,17 @@ func destination(columnTypes []*sql.ColumnType) func() []any {
 	dest := make([]func() any, 0, len(columnTypes))
 	for _, v := range columnTypes {
 		nullable, _ := v.Nullable()
-		switch strings.ToUpper(v.DatabaseTypeName()) {
+		typeName := strings.ToUpper(v.DatabaseTypeName())
+
+		switch typeName {
 		case "VARCHAR", "CHAR", "TEXT", "NVARCHAR", "LONGTEXT", "LONGBLOB", "MEDIUMTEXT", "MEDIUMBLOB", "BLOB", "TINYTEXT":
 			dest = append(dest, func() any {
 				return new(sql.NullString)
+			})
+		case "BINARY", "VARBINARY", "TINYBLOB", "BYTEA":
+			// 所有二进制类型都使用RawBytes处理，不管有没有指定长度
+			dest = append(dest, func() any {
+				return new(sql.RawBytes)
 			})
 		case "UNSIGNED INT", "UNSIGNED TINYINT", "UNSIGNED INTEGER", "UNSIGNED SMALLINT", "UNSIGNED MEDIUMINT", "UNSIGNED TINYINTEGER":
 			if nullable {
@@ -171,11 +178,14 @@ func destination(columnTypes []*sql.ColumnType) func() []any {
 					return new(float64)
 				})
 			}
-		case "DECIMAL":
+		case "DECIMAL", "NUMERIC":
+			// decimal类型，无论是否可为NULL，都使用NullString接收
+			// 因为decimal.Decimal不支持直接从sql.Scan接口中处理NULL
 			dest = append(dest, func() any {
-				return new(decimal.Decimal)
+				return new(sql.NullString)
 			})
 		default:
+			// 对于未知类型，默认使用可为NULL的字符串类型处理
 			dest = append(dest, func() any {
 				return new(sql.NullString)
 			})
@@ -213,10 +223,21 @@ func rows2SliceMap(rows *sql.Rows) (list []Row, err error) {
 		row := new(Row)
 		row.Data = map[string]any{}
 		for i := 0; i < length; i++ {
+			typeName := strings.ToUpper(columnTypes[i].DatabaseTypeName())
 			switch v := tmp[i].(type) {
 			case *sql.NullString:
 				if v.Valid {
-					row.Data[columns[i]] = v.String
+					// 如果这是DECIMAL类型且值有效，则转换为decimal.Decimal
+					if typeName == "DECIMAL" || typeName == "NUMERIC" {
+						dec, err := decimal.NewFromString(v.String)
+						if err == nil {
+							row.Data[columns[i]] = dec
+						} else {
+							row.Data[columns[i]] = v.String
+						}
+					} else {
+						row.Data[columns[i]] = v.String
+					}
 				} else {
 					row.Data[columns[i]] = nil
 				}
@@ -229,7 +250,6 @@ func rows2SliceMap(rows *sql.Rows) (list []Row, err error) {
 			case *sql.NullInt64:
 				if v.Valid {
 					// 根据原始列类型决定返回什么类型
-					typeName := strings.ToUpper(columnTypes[i].DatabaseTypeName())
 					if strings.HasPrefix(typeName, "UNSIGNED") {
 						if strings.Contains(typeName, "BIGINT") {
 							row.Data[columns[i]] = uint64(v.Int64)
@@ -249,6 +269,15 @@ func rows2SliceMap(rows *sql.Rows) (list []Row, err error) {
 			case *sql.NullFloat64:
 				if v.Valid {
 					row.Data[columns[i]] = v.Float64
+				} else {
+					row.Data[columns[i]] = nil
+				}
+			case *sql.RawBytes:
+				if v != nil && len(*v) > 0 {
+					// 复制字节数组，避免被后续扫描覆盖
+					bytesCopy := make([]byte, len(*v))
+					copy(bytesCopy, *v)
+					row.Data[columns[i]] = bytesCopy
 				} else {
 					row.Data[columns[i]] = nil
 				}
