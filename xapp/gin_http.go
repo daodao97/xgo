@@ -17,9 +17,9 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/shopspring/decimal"
 
-	"github.com/daodao97/xgo/triceid"
 	"github.com/daodao97/xgo/utils"
 	"github.com/daodao97/xgo/xlog"
+	"github.com/daodao97/xgo/xtrace"
 	"github.com/daodao97/xgo/xutil"
 )
 
@@ -92,8 +92,15 @@ func NewGin() *gin.Engine {
 			"message": "internal server error",
 		})
 	}))
-	r.Use(triceid.TraceId())
+	r.Use(xtrace.TraceId())
 	r.Use(func(c *gin.Context) {
+		// 检查是否为静态文件请求(.js, .css等)
+		path := c.Request.URL.Path
+		if isStaticFileRequest(path) {
+			c.Next()
+			return
+		}
+
 		// 开始时间
 		start := time.Now()
 
@@ -365,4 +372,15 @@ func setDefaultValues(obj any) {
 			setter.setFunc(field, defaultTag)
 		}
 	}
+}
+
+// 判断是否为静态文件请求
+func isStaticFileRequest(path string) bool {
+	staticFileExtensions := []string{".js", ".css", ".jpg", ".jpeg", ".png", ".gif", ".ico", ".svg", ".woff", ".woff2", ".ttf", ".eot"}
+	for _, ext := range staticFileExtensions {
+		if strings.HasSuffix(path, ext) {
+			return true
+		}
+	}
+	return false
 }

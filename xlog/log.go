@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/natefinch/lumberjack.v2"
 
-	"github.com/daodao97/xgo/triceid"
+	"github.com/daodao97/xgo/xtrace"
 )
 
 func init() {
@@ -84,7 +84,7 @@ func withTriceId(ctx context.Context, args ...any) []any {
 	if requestId := ctx.Value("request_id"); requestId != nil {
 		args = append(args, String("request_id", requestId.(string)))
 	}
-	if triceId := triceid.FromTraceId(ctx); triceId != "" {
+	if triceId := xtrace.FromTraceId(ctx); triceId != "" {
 		args = append(args, String("trice_id", triceId))
 	}
 	return args

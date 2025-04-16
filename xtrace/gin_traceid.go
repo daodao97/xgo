@@ -1,4 +1,4 @@
-package triceid
+package xtrace
 
 import (
 	"context"
