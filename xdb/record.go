@@ -50,7 +50,11 @@ func (r Record) GetArray(key string) []any {
 	if !ok {
 		return []any{}
 	}
-	return cast.ToSlice(v)
+	var arr []any
+
+	bt, _ := json.Marshal(v)
+	json.Unmarshal(bt, &arr)
+	return arr
 }
 
 func (r Record) GetTime(key string) *time.Time {
