@@ -18,6 +18,12 @@ import (
 	"github.com/daodao97/xgo/xlog"
 )
 
+var RequestDebug = false
+
+func SetRequestDebug(debug bool) {
+	RequestDebug = debug
+}
+
 type Request struct {
 	mu            sync.Mutex
 	debug         bool
@@ -239,6 +245,10 @@ func (r *Request) do() (*Response, error) {
 	ctx := r.ctx
 	if ctx == nil {
 		ctx = context.Background()
+	}
+
+	if RequestDebug {
+		r.debug = true
 	}
 
 	req, err := r.makeRequest(ctx)
