@@ -331,7 +331,25 @@ func (m *model) First(opt ...Option) (Record, error) {
 }
 
 func (m *model) Count(opt ...Option) (count int64, err error) {
+	var hasGroupBy bool
+	for _, v := range opt {
+		opts := &Options{}
+		v(opts)
+		if opts.groupBy != "" {
+			hasGroupBy = true
+			break
+		}
+	}
+
 	opt = append(opt, table(m.getTableName()), AggregateCount("*"))
+
+	if hasGroupBy {
+		rows, err := m.Selects(opt...)
+		if err != nil {
+			return 0, err
+		}
+		return int64(len(rows)), nil
+	}
 	var result struct {
 		Count int64
 	}
