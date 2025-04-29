@@ -26,6 +26,20 @@ func New(jobs ...Job) *Cron {
 	}
 }
 
+func NewWithCron(c *cron.Cron, jobs ...Job) *Cron {
+	return &Cron{
+		jobs: jobs,
+		cron: c,
+	}
+}
+
+func NewCron(opts ...cron.Option) *cron.Cron {
+	opts = append(opts, cron.WithLogger(newLogger()), cron.WithChain(cron.Recover(newLogger())))
+	return cron.New(
+		opts...,
+	)
+}
+
 func (c *Cron) Start() error {
 	c.cron.Start()
 	for _, job := range c.jobs {
