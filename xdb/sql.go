@@ -71,7 +71,6 @@ func Field(name ...string) Option {
 		} else if strings.Contains(v, " AS ") {
 			tmp := strings.Split(v, " AS ")
 			_name = append(_name, strings.Trim(tmp[0], " ")+" as "+strings.Trim(tmp[1], " "))
-			_name = append(_name, v)
 		} else {
 			_name = append(_name, v)
 		}
