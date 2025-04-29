@@ -6,12 +6,22 @@ import (
 	"github.com/daodao97/xgo/xlog"
 )
 
-func newLogger() *CronLogger {
-	logger := xlog.GetLogger()
+var logger *CronLogger
 
-	return &CronLogger{
-		logger: logger,
+func init() {
+	logger = &CronLogger{
+		logger: xlog.GetLogger(),
 	}
+}
+
+func NewLogger() *CronLogger {
+	if logger != nil {
+		return logger
+	}
+	logger = &CronLogger{
+		logger: xlog.GetLogger(),
+	}
+	return logger
 }
 
 type CronLogger struct {

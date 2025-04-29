@@ -20,8 +20,8 @@ func New(jobs ...Job) *Cron {
 	return &Cron{
 		jobs: jobs,
 		cron: cron.New(
-			cron.WithLogger(newLogger()),
-			cron.WithChain(cron.Recover(newLogger())),
+			cron.WithLogger(NewLogger()),
+			cron.WithChain(cron.Recover(NewLogger())),
 		),
 	}
 }
@@ -34,7 +34,7 @@ func NewWithCron(c *cron.Cron, jobs ...Job) *Cron {
 }
 
 func NewCron(opts ...cron.Option) *cron.Cron {
-	opts = append(opts, cron.WithLogger(newLogger()), cron.WithChain(cron.Recover(newLogger())))
+	opts = append(opts, cron.WithLogger(NewLogger()), cron.WithChain(cron.Recover(NewLogger())))
 	return cron.New(
 		opts...,
 	)
