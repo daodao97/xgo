@@ -336,7 +336,7 @@ func (m *model) Count(opt ...Option) (count int64, err error) {
 		Count int64
 	}
 	err = m.SelectOne(opt...).Binding(&result)
-	if err != nil {
+	if err != nil && err != ErrNotFound {
 		return 0, err
 	}
 
