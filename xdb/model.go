@@ -17,8 +17,6 @@ var ErrNotFound = errors.New("record not found")
 
 type Model interface {
 	PrimaryKey() string
-	//Deprecated: use Select instead
-	Single(opt ...Option) (Record, error)
 	First(opt ...Option) (Record, error)
 	Count(opt ...Option) (count int64, err error)
 	Selects(opt ...Option) ([]Record, error)
@@ -37,9 +35,11 @@ type Model interface {
 	Ctx(ctx context.Context) Model
 	Tx(tx *sql.Tx) Model
 	ClearCache() Model
+	//Deprecated: use First instead
+	Single(opt ...Option) (Record, error)
 	//Deprecated: use Selects instead
 	Select(opt ...Option) (rows *Rows)
-	//Deprecated: use Single instead
+	//Deprecated: use First instead
 	SelectOne(opt ...Option) *Row
 	//Deprecated: use FindById instead
 	FindBy(id string) *Row
@@ -327,7 +327,14 @@ func (m *model) Single(opt ...Option) (Record, error) {
 
 func (m *model) First(opt ...Option) (Record, error) {
 	opt = append(opt, Limit(1))
-	return m.Single(opt...)
+	res, err := m.Selects(opt...)
+	if err != nil {
+		return nil, err
+	}
+	if len(res) == 0 {
+		return nil, ErrNotFound
+	}
+	return res[0], nil
 }
 
 func (m *model) Count(opt ...Option) (count int64, err error) {
@@ -335,9 +342,13 @@ func (m *model) Count(opt ...Option) (count int64, err error) {
 	var result struct {
 		Count int64
 	}
-	err = m.SelectOne(opt...).Binding(&result)
+	record, err := m.First(opt...)
 	if err != nil && err != ErrNotFound {
 		return 0, err
+	}
+	err = record.Binding(&result)
+	if err != nil {
+		return 0, fmt.Errorf("count binding error: %w", err)
 	}
 
 	return result.Count, nil

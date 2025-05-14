@@ -238,6 +238,7 @@ func (r *Row) GetAny(key string) any {
 	return v
 }
 
+// Deprecated: use Record instead
 type Rows struct {
 	List []Row
 	Err  error
