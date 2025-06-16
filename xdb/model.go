@@ -23,8 +23,10 @@ type Model interface {
 	Page(page int, size int, opt ...Option) (int64, []Record, error)
 	Insert(record Record) (lastId int64, err error)
 	InsertBatch(records []Record) (lastId int64, err error)
+	Inserts(records []Record) (lastId int64, err error)
 	Update(record Record, opt ...Option) (ok bool, err error)
 	InsertOrUpdate(record Record, updateFields ...string) (affected int64, err error)
+	InsertIgnore(record Record) (lastId int64, err error)
 	Delete(opt ...Option) (ok bool, err error)
 	Exec(query string, args ...any) (sql.Result, error)
 	Query(query string, args ...any) (*sql.Rows, error)
@@ -418,6 +420,14 @@ func (m *model) Insert(record Record) (lastId int64, err error) {
 	return lastId, nil
 }
 
+func (m *model) Inserts(records []Record) (lastId int64, err error) {
+	if m.err != nil {
+		return 0, m.err
+	}
+
+	return m.InsertBatch(records)
+}
+
 func (m *model) InsertBatch(records []Record) (lastId int64, err error) {
 	if m.err != nil {
 		return 0, m.err
@@ -656,6 +666,62 @@ func (m *model) InsertOrUpdate(record Record, updateFields ...string) (affected 
 	// if row.Err != nil {
 	// 	return nil, affected, row.Err
 	// }
+
+	return affected, nil
+}
+
+func (m *model) InsertIgnore(record Record) (lastId int64, err error) {
+	if m.err != nil {
+		return 0, m.err
+	}
+
+	var kv []any
+	defer dbLog(m.ctx, "InsertOrUpdate", time.Now(), &err, &kv)
+
+	if len(record) == 0 {
+		return 0, errors.New("空记录无法插入")
+	}
+
+	record, err = m.hookInput(record)
+	if err != nil {
+		return 0, err
+	}
+
+	// 准备插入的字段和值
+	var fields []string
+	var values []any
+	for field, value := range record {
+		fields = append(fields, field)
+		values = append(values, value)
+	}
+
+	// 构建 SQL 语句
+	query := fmt.Sprintf(
+		"INSERT IGNORE INTO %s (%s) VALUES (%s)",
+		m.table,
+		strings.Join(fields, ", "),
+		strings.Repeat("?, ", len(fields)-1)+"?",
+	)
+
+	values = parseSetValues(values)
+
+	kv = append(kv, "sql", query, "args", values)
+
+	// 执行 SQL
+	var result sql.Result
+	if m.tx != nil {
+		result, err = execTx(m.tx, query, values...)
+	} else {
+		result, err = exec(m.client, query, values...)
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	affected, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
 
 	return affected, nil
 }
