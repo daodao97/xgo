@@ -2,7 +2,7 @@ package xutil
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 )
 
@@ -43,5 +43,5 @@ func Retry[T any](ctx context.Context, fn func(ctx context.Context) (T, error), 
 		}
 		time.Sleep(opt.Delay)
 	}
-	return result, errors.New("retry failed")
+	return result, fmt.Errorf("retry failed: %w", err)
 }
