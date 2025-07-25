@@ -152,23 +152,39 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 				return
 			}
 
-			line = bytes.TrimSpace(line)
-			if len(line) == 0 {
-				continue
-			}
+			// 保存原始的换行符
+			originalLine := make([]byte, len(line))
+			copy(originalLine, line)
 
-			flush := true
-			for _, f := range hooks {
-				flush, line = f(line)
-			}
-			if !flush {
-				continue
-			}
+			// 只去除右侧的换行符用于处理，保留其他空白字符
+			trimmedLine := bytes.TrimRight(line, "\n")
 
-			// 写入响应
-			if _, err := w.Write(append(bytes.TrimSpace(line), '\n', '\n')); err != nil {
-				http.Error(w, fmt.Sprintf("Error writing response: %v", err), http.StatusInternalServerError)
-				return
+			if len(trimmedLine) == 0 {
+				// 如果是空行，直接写入原始内容
+				if _, err := w.Write(originalLine); err != nil {
+					http.Error(w, fmt.Sprintf("Error writing response: %v", err), http.StatusInternalServerError)
+					return
+				}
+			} else {
+				flush := true
+				processedLine := trimmedLine
+				for _, f := range hooks {
+					flush, processedLine = f(processedLine)
+				}
+				if !flush {
+					continue
+				}
+
+				// 恢复原始的换行符
+				if bytes.HasSuffix(originalLine, []byte("\n")) {
+					processedLine = append(processedLine, '\n')
+				}
+
+				// 写入响应，保持原有换行符
+				if _, err := w.Write(processedLine); err != nil {
+					http.Error(w, fmt.Sprintf("Error writing response: %v", err), http.StatusInternalServerError)
+					return
+				}
 			}
 
 			// 刷新响应
