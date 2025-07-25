@@ -1,0 +1,128 @@
+# xgo - Go Web开发框架
+
+xgo是一个模块化的Go语言Web开发框架，提供完整的Web应用开发工具链。
+
+## 项目信息
+- 模块名: github.com/daodao97/xgo
+- Go版本: 1.21.1
+- 许可证: 未指定
+
+## 核心功能模块
+
+### 应用框架 (xapp)
+- 应用程序生命周期管理
+- 服务启动/停止控制
+- 配置参数解析
+- 信号处理
+
+### 数据库层 (xdb)
+- 数据库连接池管理
+- ORM功能
+- 模型定义和操作
+- 缓存集成
+- 数据验证
+- SQL构建器
+
+### 管理后台 (xadmin)
+- 内置Web管理界面
+- CRUD操作界面
+- 用户管理
+- 权限控制
+- Vue.js前端界面
+
+### HTTP处理 (xhttp)
+- HTTP请求/响应处理
+- 中间件支持
+- Cookie管理
+- 路由处理
+- 服务器启动
+
+### 身份认证 (xjwt)
+- JWT token生成和验证
+- HMAC和RSA签名支持
+- 认证中间件
+
+### 日志系统 (xlog)
+- 结构化日志
+- 颜色输出
+- 日志级别控制
+- 美化输出
+
+### 缓存系统 (cache)
+- 内存缓存
+- Redis缓存
+- 缓存接口抽象
+
+### 限流器 (limiter)
+- 并发限制
+- 任务限流
+- 模型级别限流
+
+### 工具库
+- **xjson**: JSON处理和类型转换
+- **xproxy**: 代理和静态文件服务
+- **xqueue**: Redis队列处理
+- **xredis**: Redis操作工具
+- **xrequest**: HTTP客户端工具
+- **xresty**: Resty HTTP客户端封装
+- **xtrace**: 链路追踪
+- **xtype**: 类型处理工具
+- **xutil**: 通用工具函数
+- **xcron**: 定时任务
+- **xctx**: 上下文处理
+- **xcode**: 代码生成工具
+
+## 主要依赖
+
+### Web框架
+- gin-gonic/gin - HTTP web框架
+- gorilla/mux - HTTP路由器
+
+### 数据库
+- go-sql-driver/mysql - MySQL驱动
+- go-redis/redis/v8 - Redis客户端
+
+### 工具库
+- golang-jwt/jwt/v5 - JWT处理
+- go-resty/resty/v2 - HTTP客户端
+- robfig/cron/v3 - 定时任务
+- spf13/cast - 类型转换
+- tidwall/gjson - JSON解析
+
+## 使用场景
+
+1. **Web API开发**: 快速构建RESTful API
+2. **管理后台**: 内置的管理界面系统
+3. **微服务**: 模块化设计适合微服务架构
+4. **数据处理**: 完整的数据库和缓存支持
+5. **代理服务**: 内置代理功能
+
+## 示例项目
+
+项目包含一个完整的管理后台示例 (`example/admin/`)，展示了：
+- 应用配置
+- 数据库集成
+- API路由设置
+- 用户认证
+- 管理界面
+
+## 快速开始
+
+```go
+import "github.com/daodao97/xgo/xapp"
+
+func main() {
+    app := xapp.NewApp()
+    // 配置和启动应用
+    app.Run()
+}
+```
+
+## 特点
+
+- **模块化设计**: 各组件独立，可按需使用
+- **双框架支持**: 同时支持Gin和Gorilla Mux
+- **内置管理界面**: 完整的后台管理系统
+- **缓存集成**: 多种缓存后端支持
+- **认证授权**: JWT和权限管理
+- **开发友好**: 丰富的工具和中间件
