@@ -383,10 +383,10 @@ func (m *model) Insert(record Record) (lastId int64, err error) {
 		}
 	}
 
-	delete(_record, m.primaryKey)
-	if len(_record) == 0 {
-		return 0, errors.New("empty record to insert")
-	}
+	// delete(_record, m.primaryKey)
+	// if len(_record) == 0 {
+	// 	return 0, errors.New("empty record to insert")
+	// }
 
 	ks, vs := m.recordToKV(_record)
 	_sql, args := InsertBuilder(table(m.getTableName()), Field(ks...), Value(vs...))
