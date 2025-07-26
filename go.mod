@@ -3,6 +3,7 @@ module github.com/daodao97/xgo
 go 1.21.1
 
 require (
+	github.com/andybalholm/brotli v1.0.5
 	github.com/bogdanfinn/fhttp v0.5.28
 	github.com/bogdanfinn/tls-client v1.7.8
 	github.com/caarlos0/env/v11 v11.3.1
@@ -34,7 +35,6 @@ require (
 )
 
 require (
-	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/bogdanfinn/utls v1.6.1 // indirect
 	github.com/cloudflare/circl v1.3.6 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect

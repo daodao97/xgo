@@ -3,6 +3,8 @@ package xrequest
 import (
 	"bufio"
 	"bytes"
+	"compress/flate"
+	"compress/gzip"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -11,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/andybalholm/brotli"
 	"github.com/daodao97/xgo/xcode"
 	"github.com/daodao97/xgo/xjson"
 )
@@ -33,8 +36,33 @@ func (r *Response) parseResponse() bool {
 	if strings.Contains(r.RawResponse.Header.Get("Content-Type"), "text/event-stream") {
 		return false
 	}
+	
+	// 获取原始响应体
+	var reader io.Reader = r.RawResponse.Body
+	
+	// 检查Content-Encoding并处理压缩
+	encoding := r.RawResponse.Header.Get("Content-Encoding")
+	switch encoding {
+	case "gzip":
+		if gzipReader, err := gzip.NewReader(r.RawResponse.Body); err == nil {
+			reader = gzipReader
+			defer gzipReader.Close()
+			// 删除Content-Encoding头，因为内容已解压缩
+			r.RawResponse.Header.Del("Content-Encoding")
+		}
+	case "deflate":
+		reader = flate.NewReader(r.RawResponse.Body)
+		defer reader.(io.ReadCloser).Close()
+		// 删除Content-Encoding头，因为内容已解压缩
+		r.RawResponse.Header.Del("Content-Encoding")
+	case "br":
+		reader = brotli.NewReader(r.RawResponse.Body)
+		// 删除Content-Encoding头，因为内容已解压缩
+		r.RawResponse.Header.Del("Content-Encoding")
+	}
+	
 	var body []byte
-	body, _ = io.ReadAll(r.RawResponse.Body)
+	body, _ = io.ReadAll(reader)
 	r.RawResponse.Body.Close()
 	r.RawResponse.Body = io.NopCloser(bytes.NewBuffer(body))
 	r.parsed = true
