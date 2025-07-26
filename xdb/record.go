@@ -45,6 +45,42 @@ func (r Record) GetInt(key string) int {
 	return cast.ToInt(v)
 }
 
+func (r Record) GetInt64(key string) int64 {
+	v, ok := r[key]
+	if !ok {
+		return 0
+	}
+	return cast.ToInt64(v)
+}
+
+func (r Record) GetUint64(key string) uint64 {
+	v, ok := r[key]
+	if !ok {
+		return 0
+	}
+	return cast.ToUint64(v)
+}
+
+func (r Record) GetFloat64(key string) float64 {
+	v, ok := r[key]
+	if !ok {
+		return 0
+	}
+	return cast.ToFloat64(v)
+}
+
+func (r Record) GetDecimal(key string) *decimal.Decimal {
+	v, ok := r[key]
+	if !ok {
+		return nil
+	}
+	d, err := decimal.NewFromString(cast.ToString(v))
+	if err != nil {
+		return nil
+	}
+	return &d
+}
+
 func (r Record) GetArray(key string) []any {
 	v, ok := r[key]
 	if !ok {
