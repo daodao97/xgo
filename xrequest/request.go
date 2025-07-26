@@ -495,12 +495,8 @@ func (r *Request) prepareBody() (io.Reader, error) {
 
 func formatHeaderKey(key string) string {
 	parts := strings.Split(key, "-")
-	if len(parts) > 1 {
-		for i, part := range parts {
-			parts[i] = strings.ToUpper(part[:1]) + strings.ToLower(part[1:])
-		}
-	} else {
-		parts[0] = strings.ToUpper(parts[0])
+	for i, part := range parts {
+		parts[i] = strings.ToUpper(part[:1]) + strings.ToLower(part[1:])
 	}
 	return strings.Join(parts, "-")
 }
