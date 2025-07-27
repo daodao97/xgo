@@ -2,7 +2,6 @@ package xlog
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"os"
 
@@ -130,11 +129,9 @@ var (
 )
 
 func Map(key string, value any) slog.Attr {
-	jsonBytes, _ := json.Marshal(value)
-	return slog.Attr{Key: key, Value: slog.StringValue(string(jsonBytes))}
+	return slog.Attr{Key: key, Value: slog.AnyValue(value)}
 }
 
 func AnySlice(key string, value []any) slog.Attr {
-	jsonBytes, _ := json.Marshal(value)
-	return slog.Attr{Key: key, Value: slog.StringValue(string(jsonBytes))}
+	return slog.Attr{Key: key, Value: slog.AnyValue(value)}
 }

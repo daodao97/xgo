@@ -2,6 +2,7 @@ package xlog
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -42,11 +43,19 @@ func (h *PrettyHandler) Handle(ctx context.Context, r slog.Record) error {
 
 	r.Attrs(func(a slog.Attr) bool {
 		var formattedAttr string
-		if strVal, ok := a.Value.Any().(string); ok {
-			formattedAttr = fmt.Sprintf("%s=%s", color.New(color.FgCyan).Sprintf(a.Key), strVal)
-		} else {
-			formattedAttr = fmt.Sprintf("%s=%v", color.New(color.FgCyan).Sprintf(a.Key), a.Value.Any())
+
+		switch v := a.Value.Any().(type) {
+		case string:
+			formattedAttr = fmt.Sprintf("%s=%q", color.New(color.FgCyan).Sprintf(a.Key), v)
+		default:
+			strVal, err := json.Marshal(v)
+			if err != nil {
+				formattedAttr = fmt.Sprintf("%s=%v", color.New(color.FgCyan).Sprintf(a.Key), v)
+			} else {
+				formattedAttr = fmt.Sprintf("%s=%s", color.New(color.FgCyan).Sprintf(a.Key), string(strVal))
+			}
 		}
+
 		_log = append(_log, formattedAttr)
 
 		return true
