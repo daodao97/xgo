@@ -167,7 +167,7 @@ func NewGin() *gin.Engine {
 		}
 
 		// 获取响应的 Content-Type
-		responseContentType := w.Header().Get("Content-Type")
+		responseContentType := w.ResponseWriter.Header().Get("Content-Type")
 
 		// 添加响应体
 		if strings.HasPrefix(responseContentType, "application/json") && w.body.Len() > 0 {
