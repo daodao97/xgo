@@ -269,7 +269,7 @@ func (r *Request) do() (*Response, error) {
 
 	client := r.client
 	if client == nil {
-		client = &http.Client{}
+		client = GetDefaultProxyClient()
 	}
 	if r.proxy != "" {
 		client.Transport = &http.Transport{Proxy: func(_ *http.Request) (*url.URL, error) {

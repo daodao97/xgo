@@ -33,6 +33,10 @@ var Args struct {
 	AppEnv        string `long:"app-env" description:"App environment" env:"APP_ENV" default:"dev"`
 }
 
+func init() {
+	ParserFlags(&Args)
+}
+
 type App struct {
 	startups     []Startup
 	servers      []NewServer
@@ -41,10 +45,7 @@ type App struct {
 }
 
 func NewApp() *App {
-	ParserFlags(&Args)
-
 	xlog.Debug("app args", xlog.Any("args", fmt.Sprintf("%+v", Args)))
-
 	return &App{}
 }
 
