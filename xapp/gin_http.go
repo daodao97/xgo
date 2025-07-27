@@ -168,15 +168,16 @@ func NewGin() *gin.Engine {
 
 		// 获取响应的 Content-Type
 		responseContentType := w.ResponseWriter.Header().Get("Content-Type")
-
-		// 添加响应体
-		if strings.HasPrefix(responseContentType, "application/json") && w.body.Len() > 0 {
-			const maxRespLength = 1024 * 10 // 10KB
-			respStr := w.body.String()
-			if len(respStr) > maxRespLength {
-				respStr = respStr[:maxRespLength] + "..."
-			}
-			args = append(args, slog.String("response", respStr))
+		// 检查响应是否被编码
+		contentEncoding := w.ResponseWriter.Header().Get("Content-Encoding")
+		// 添加响应体（如果是JSON且未被编码）
+		if strings.HasPrefix(responseContentType, "application/json") && w.body.Len() > 0 && contentEncoding == "" {
+			// const maxRespLength = 1024 * 10 // 10KB
+			// respStr := w.body.String()
+			// if len(respStr) > maxRespLength {
+			// 	respStr = respStr[:maxRespLength] + "..."
+			// }
+			args = append(args, slog.String("response", w.body.String()))
 		}
 
 		logFunc(c, "http request", args...)
