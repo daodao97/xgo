@@ -43,7 +43,7 @@ func (h *PrettyHandler) Handle(ctx context.Context, r slog.Record) error {
 	r.Attrs(func(a slog.Attr) bool {
 		var formattedAttr string
 		if strVal, ok := a.Value.Any().(string); ok {
-			formattedAttr = fmt.Sprintf("%s=%q", color.New(color.FgCyan).Sprintf(a.Key), strVal)
+			formattedAttr = fmt.Sprintf("%s=%s", color.New(color.FgCyan).Sprintf(a.Key), strVal)
 		} else {
 			formattedAttr = fmt.Sprintf("%s=%v", color.New(color.FgCyan).Sprintf(a.Key), a.Value.Any())
 		}
