@@ -150,7 +150,7 @@ func NewGin() *gin.Engine {
 				headers[k] = v[0]
 			}
 		}
-		args = append(args, slog.Any("headers", headers))
+		args = append(args, xlog.Map("headers", headers))
 
 		// 检查是否为文件上传请求
 		contentType := c.GetHeader("Content-Type")

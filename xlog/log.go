@@ -129,7 +129,7 @@ var (
 	ErrorC = ErrorCtx
 )
 
-func Map(key string, value map[string]any) slog.Attr {
+func Map(key string, value any) slog.Attr {
 	jsonBytes, _ := json.Marshal(value)
 	return slog.Attr{Key: key, Value: slog.StringValue(string(jsonBytes))}
 }
