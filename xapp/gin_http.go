@@ -44,7 +44,19 @@ func (r responseBodyWriter) Write(b []byte) (int, error) {
 	return r.ResponseWriter.Write(b)
 }
 
-func NewGin() *gin.Engine {
+type AppOption func(*AppOptions)
+
+type AppOptions struct {
+}
+
+var defaultAppOptions = AppOptions{}
+
+func NewGin(opts ...AppOption) *gin.Engine {
+	appOptions := defaultAppOptions
+	for _, opt := range opts {
+		opt(&appOptions)
+	}
+
 	// 添加 decimal 类型验证支持
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		v.RegisterCustomTypeFunc(func(field reflect.Value) interface{} {
@@ -94,9 +106,9 @@ func NewGin() *gin.Engine {
 	}))
 	r.Use(xtrace.TraceId())
 	r.Use(func(c *gin.Context) {
-		// 检查是否为静态文件请求(.js, .css等)
-		path := c.Request.URL.Path
-		if isStaticFileRequest(path) {
+		isStaticFile := isStaticFileRequest(c.Request.URL.Path)
+		isJsonResponse := strings.HasPrefix(c.Writer.Header().Get("Content-Type"), "application/json")
+		if isStaticFile || !isJsonResponse {
 			c.Next()
 			return
 		}
@@ -116,6 +128,9 @@ func NewGin() *gin.Engine {
 			ResponseWriter: c.Writer,
 			body:           &bytes.Buffer{},
 		}
+
+		// 仅记录json响应
+
 		c.Writer = w
 
 		// 处理请求
