@@ -47,6 +47,8 @@ func (h *PrettyHandler) Handle(ctx context.Context, r slog.Record) error {
 		switch v := a.Value.Any().(type) {
 		case string, int, int64, uint64, float64, bool, time.Time, time.Duration, []byte:
 			formattedAttr = fmt.Sprintf("%s=%q", color.New(color.FgCyan).Sprintf(a.Key), v)
+		case error:
+			formattedAttr = fmt.Sprintf("%s=%q", color.New(color.FgCyan).Sprintf(a.Key), v.Error())
 		default:
 			strVal, err := json.Marshal(v)
 			if err != nil {
