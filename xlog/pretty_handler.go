@@ -45,8 +45,18 @@ func (h *PrettyHandler) Handle(ctx context.Context, r slog.Record) error {
 		var formattedAttr string
 
 		switch v := a.Value.Any().(type) {
-		case string, int, int64, uint64, float64, bool, time.Time, time.Duration, []byte:
+		case string:
 			formattedAttr = fmt.Sprintf("%s=%q", color.New(color.FgCyan).Sprintf(a.Key), v)
+		case int, int64, uint64, float64:
+			formattedAttr = fmt.Sprintf("%s=%v", color.New(color.FgCyan).Sprintf(a.Key), v)
+		case bool:
+			formattedAttr = fmt.Sprintf("%s=%t", color.New(color.FgCyan).Sprintf(a.Key), v)
+		case time.Time:
+			formattedAttr = fmt.Sprintf("%s=%q", color.New(color.FgCyan).Sprintf(a.Key), v.Format(time.RFC3339))
+		case time.Duration:
+			formattedAttr = fmt.Sprintf("%s=%q", color.New(color.FgCyan).Sprintf(a.Key), v.String())
+		case []byte:
+			formattedAttr = fmt.Sprintf("%s=%q", color.New(color.FgCyan).Sprintf(a.Key), string(v))
 		case error:
 			formattedAttr = fmt.Sprintf("%s=%q", color.New(color.FgCyan).Sprintf(a.Key), v.Error())
 		default:
