@@ -1,14 +1,18 @@
 package xcron
 
 import (
+	"context"
+
 	"github.com/daodao97/xgo/xlog"
+	"github.com/daodao97/xgo/xutil"
 	"github.com/robfig/cron/v3"
 )
 
 type Job struct {
-	Name string
-	Spec string
-	Func func()
+	Name      string // 任务名称
+	Spec      string // 任务执行时间
+	Func      func() // 任务执行函数
+	Immediate bool   // 是否立即执行
 }
 
 type Cron struct {
@@ -48,6 +52,9 @@ func (c *Cron) Start() error {
 			return err
 		}
 		xlog.Debug("add job", xlog.String("name", job.Name), xlog.String("spec", job.Spec))
+		if job.Immediate {
+			xutil.Go(context.Background(), job.Func)
+		}
 	}
 	return nil
 }

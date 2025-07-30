@@ -15,16 +15,9 @@ func TestRunner(t *testing.T) {
 	})
 
 	// Define different limiters based on user type
-	concurrencyLimiter := &ConcurrencyLimiter{
-		ConcurrentLimit: 1,
-		redisClient:     rdb,
-	}
+	concurrencyLimiter := NewConcurrencyLimiter("test", 1, rdb)
 
-	taskLimiter := &TaskLimiter{
-		WindowHours: 24,
-		MaxRequests: 50,
-		redisClient: rdb,
-	}
+	taskLimiter := NewTaskLimiter(24, 50, rdb)
 
 	modelLimiter := &ModelLimiter{
 		AllowedResources: map[string]bool{
