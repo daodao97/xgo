@@ -107,8 +107,7 @@ func NewGin(opts ...AppOption) *gin.Engine {
 	r.Use(xtrace.TraceId())
 	r.Use(func(c *gin.Context) {
 		isStaticFile := isStaticFileRequest(c.Request.URL.Path)
-		isJsonResponse := strings.HasPrefix(c.Writer.Header().Get("Content-Type"), "application/json")
-		if isStaticFile || !isJsonResponse {
+		if isStaticFile {
 			c.Next()
 			return
 		}
