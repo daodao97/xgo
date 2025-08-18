@@ -95,24 +95,6 @@ func NewGin(opts ...AppOption) *gin.Engine {
 	}
 	r := gin.New()
 	// r.Use(gin.Recovery())
-	r.Use(gin.CustomRecovery(func(c *gin.Context, err any) {
-		path := c.Request.URL.Path
-		query := c.Request.URL.RawQuery
-
-		xlog.ErrorC(c, "panic recovered",
-			xlog.Time("time", time.Now()),
-			xlog.String("path", path),
-			xlog.String("query", query),
-			xlog.Any("error", err),
-			// 可选：添加堆栈信息
-			xlog.String("stack", string(xutil.Stack(3))),
-		)
-
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    500,
-			"message": "internal server error",
-		})
-	}))
 	r.Use(xtrace.TraceId())
 	r.Use(func(c *gin.Context) {
 		isStaticFile := isStaticFileRequest(c.Request.URL.Path)
@@ -132,6 +114,10 @@ func NewGin(opts ...AppOption) *gin.Engine {
 		}
 
 		// 包装响应写入器
+		if c.Writer == nil {
+			c.Next()
+			return
+		}
 		w := &responseBodyWriter{
 			ResponseWriter: c.Writer,
 			body:           &bytes.Buffer{},
@@ -150,20 +136,25 @@ func NewGin(opts ...AppOption) *gin.Engine {
 
 		// 根据状态码选择日志级别
 		logFunc := xlog.DebugC
-		if c.Writer.Status() >= 400 {
-			logFunc = xlog.WarnC
-		}
-		if c.Writer.Status() >= 500 {
-			logFunc = xlog.ErrorC
+		if c.Writer != nil {
+			if c.Writer.Status() >= 400 {
+				logFunc = xlog.WarnC
+			}
+			if c.Writer.Status() >= 500 {
+				logFunc = xlog.ErrorC
+			}
 		}
 
 		args := []any{
 			slog.String("client_ip", c.ClientIP()),
 			slog.String("time", end.Format(time.DateTime)),
-			slog.Int("status_code", c.Writer.Status()),
 			slog.Duration("duration", duration),
 			slog.String("method", c.Request.Method),
 			slog.String("path", c.Request.URL.Path),
+		}
+		
+		if c.Writer != nil {
+			args = append(args, slog.Int("status_code", c.Writer.Status()))
 		}
 
 		// 添加请求头信息
@@ -200,13 +191,35 @@ func NewGin(opts ...AppOption) *gin.Engine {
 		// if len(respStr) > maxRespLength {
 		// 	respStr = respStr[:maxRespLength] + "..."
 		// }
-		args = append(args, slog.String("response", w.body.String()))
+		if w != nil && w.body != nil {
+			args = append(args, slog.String("response", w.body.String()))
+		}
 		// }
 
 		if appOptions.PrintReqeustLog {
 			logFunc(c, "http request", args...)
 		}
 	})
+	
+	// Recovery 中间件放在最后，这样可以捕获所有中间件和业务逻辑中的 panic
+	r.Use(gin.CustomRecovery(func(c *gin.Context, err any) {
+		path := c.Request.URL.Path
+		query := c.Request.URL.RawQuery
+
+		xlog.ErrorC(c, "panic recovered",
+			xlog.Time("time", time.Now()),
+			xlog.String("path", path),
+			xlog.String("query", query),
+			xlog.Any("error", err),
+			// 可选：添加堆栈信息
+			xlog.String("stack", string(xutil.Stack(3))),
+		)
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "internal server error",
+		})
+	}))
 
 	return r
 }
@@ -306,7 +319,10 @@ func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error
 			return
 		}
 
-		isSSE := c.Writer.Header().Get("Content-Type") == "text/event-stream"
+		var isSSE bool
+		if c.Writer != nil {
+			isSSE = c.Writer.Header().Get("Content-Type") == "text/event-stream"
+		}
 		if isSSE {
 			return
 		}
