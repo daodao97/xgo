@@ -47,14 +47,23 @@ func (r responseBodyWriter) Write(b []byte) (int, error) {
 type AppOption func(*AppOptions)
 
 type AppOptions struct {
+	PrintReqeustLog bool
 }
 
-var defaultAppOptions = AppOptions{}
+var defaultAppOptions = &AppOptions{
+	PrintReqeustLog: true,
+}
+
+func WithPrintReqeustLog(printReqeustLog bool) AppOption {
+	return func(options *AppOptions) {
+		options.PrintReqeustLog = printReqeustLog
+	}
+}
 
 func NewGin(opts ...AppOption) *gin.Engine {
 	appOptions := defaultAppOptions
 	for _, opt := range opts {
-		opt(&appOptions)
+		opt(appOptions)
 	}
 
 	// 添加 decimal 类型验证支持
@@ -194,7 +203,9 @@ func NewGin(opts ...AppOption) *gin.Engine {
 		args = append(args, slog.String("response", w.body.String()))
 		// }
 
-		logFunc(c, "http request", args...)
+		if appOptions.PrintReqeustLog {
+			logFunc(c, "http request", args...)
+		}
 	})
 
 	return r
