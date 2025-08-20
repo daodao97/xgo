@@ -47,8 +47,9 @@ type Request struct {
 	password  string
 
 	// retry
-	retryAttempts uint
-	retryDelay    time.Duration
+	retryAttempts  uint
+	retryDelay     time.Duration
+	retryCondition func(*Response, error) bool
 
 	// client
 	client *http.Client
@@ -173,6 +174,13 @@ func (r *Request) SetRetry(attempts uint, delay time.Duration) *Request {
 	return r
 }
 
+func (r *Request) SetRetryWithCondition(attempts uint, delay time.Duration, condition func(*Response, error) bool) *Request {
+	r.retryAttempts = attempts
+	r.retryDelay = delay
+	r.retryCondition = condition
+	return r
+}
+
 func (r *Request) SetClient(client *http.Client) *Request {
 	r.client = client
 	return r
@@ -232,13 +240,31 @@ func (r *Request) Do() (resp *Response, err error) {
 
 	err = retry.Do(func() error {
 		resp, err = r.do()
-		return err
+
+		if r.shouldRetry(resp, err) {
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("需要重试")
+		}
+
+		return nil
 	}, retry.Attempts(r.retryAttempts), retry.Delay(r.retryDelay))
-	if err != nil {
-		return nil, err
+
+	return resp, err
+}
+
+func (r *Request) shouldRetry(resp *Response, err error) bool {
+	if r.retryCondition != nil {
+		return r.retryCondition(resp, err)
 	}
 
-	return resp, nil
+	// 默认重试逻辑：网络错误或服务器错误(>= 500)
+	if err != nil {
+		return true
+	}
+
+	return resp != nil && resp.StatusCode() >= http.StatusInternalServerError
 }
 
 func (r *Request) do() (*Response, error) {

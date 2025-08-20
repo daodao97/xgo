@@ -29,6 +29,10 @@ type Response struct {
 	parsed      bool
 }
 
+func (r *Response) EmptyBody() bool {
+	return r.RawResponse.ContentLength == -1
+}
+
 func (r *Response) parseResponse() bool {
 	if r.parsed {
 		return true
@@ -36,10 +40,10 @@ func (r *Response) parseResponse() bool {
 	if strings.Contains(r.RawResponse.Header.Get("Content-Type"), "text/event-stream") {
 		return false
 	}
-	
+
 	// 获取原始响应体
 	var reader io.Reader = r.RawResponse.Body
-	
+
 	// 检查Content-Encoding并处理压缩
 	encoding := r.RawResponse.Header.Get("Content-Encoding")
 	switch encoding {
@@ -60,7 +64,7 @@ func (r *Response) parseResponse() bool {
 		// 删除Content-Encoding头，因为内容已解压缩
 		r.RawResponse.Header.Del("Content-Encoding")
 	}
-	
+
 	var body []byte
 	body, _ = io.ReadAll(reader)
 	r.RawResponse.Body.Close()
