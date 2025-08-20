@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/avast/retry-go"
 	"github.com/daodao97/xgo/utils"
 	"github.com/daodao97/xgo/xlog"
 )
@@ -238,20 +237,29 @@ func (r *Request) Do() (resp *Response, err error) {
 		return r.do()
 	}
 
-	err = retry.Do(func() error {
+	var lastErr error
+	for attempt := uint(1); attempt <= r.retryAttempts; attempt++ {
 		resp, err = r.do()
-
-		if r.shouldRetry(resp, err) {
-			if err != nil {
-				return err
-			}
-			return fmt.Errorf("需要重试")
+		
+		if !r.shouldRetry(resp, err) {
+			return resp, err
 		}
 
-		return nil
-	}, retry.Attempts(r.retryAttempts), retry.Delay(r.retryDelay))
+		lastErr = err
+		if attempt < r.retryAttempts {
+			time.Sleep(r.retryDelay)
+		}
+	}
 
-	return resp, err
+	if lastErr != nil {
+		return resp, lastErr
+	}
+	
+	if resp != nil && resp.StatusCode() >= http.StatusInternalServerError {
+		return resp, fmt.Errorf("request failed after %d attempts, status: %d", r.retryAttempts, resp.StatusCode())
+	}
+
+	return resp, fmt.Errorf("request failed after %d attempts", r.retryAttempts)
 }
 
 func (r *Request) shouldRetry(resp *Response, err error) bool {

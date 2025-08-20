@@ -29,8 +29,45 @@ type Response struct {
 	parsed      bool
 }
 
-func (r *Response) EmptyBody() bool {
-	return r.RawResponse.ContentLength == -1
+func (r *Response) BodyIsEmpty() bool {
+	// 如果已经解析，检查解析后的内容
+	if r.parsed {
+		if len(r.body) == 0 {
+			return true
+		}
+		return len(strings.TrimSpace(string(r.body))) == 0
+	}
+
+	// 未解析时，根据 Content-Length 判断
+	contentLength := r.RawResponse.ContentLength
+	if contentLength == 0 {
+		return true
+	}
+
+	// Content-Length 为 -1 表示未知长度，需要 peek 判断
+	if contentLength == -1 {
+		if r.RawResponse.Body == nil {
+			return true
+		}
+
+		// 使用 peek 检查是否有数据，不消耗原始 body
+		peekReader := bufio.NewReader(r.RawResponse.Body)
+		_, err := peekReader.Peek(1)
+		if err == io.EOF {
+			return true
+		}
+		// 将 peekReader 重新包装回 RawResponse.Body
+		r.RawResponse.Body = io.NopCloser(peekReader)
+		return false
+	}
+
+	// Content-Length > 0，但可能内容全是空白字符
+	// 对于 SSE 这种流式响应，也需要能判断是否真的有内容
+	if contentLength > 0 {
+		return false
+	}
+
+	return false
 }
 
 func (r *Response) parseResponse() bool {
