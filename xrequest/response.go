@@ -117,6 +117,15 @@ func (r *Response) StatusCode() int {
 
 func (r *Response) String() string {
 	r.parseResponse()
+	if r.parsed {
+		return string(r.body)
+	}
+
+	body, _ := io.ReadAll(r.RawResponse.Body)
+	r.RawResponse.Body.Close()
+	r.RawResponse.Body = io.NopCloser(bytes.NewBuffer(body))
+	r.body = body
+	r.parsed = true
 	return string(r.body)
 }
 
