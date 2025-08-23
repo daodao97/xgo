@@ -197,18 +197,72 @@ type ResponseHook func(data []byte) (flush bool, newData []byte)
 
 func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...ResponseHook) (int64, error) {
 	var totalBytes int64
-	
+
 	w.WriteHeader(r.statusCode)
 	for k, v := range r.RawResponse.Header {
 		w.Header()[k] = v
 	}
 	if strings.Contains(r.RawResponse.Header.Get("Content-Type"), "text/event-stream") {
 		reader := bufio.NewReader(r.RawResponse.Body)
+		
+		// 尝试读取第一行来判断是否为真正的 SSE 格式
+		firstLine, err := reader.Peek(1024) // 预读取更多数据以判断格式
+		if err != nil && err != io.EOF {
+			return totalBytes, fmt.Errorf("error peeking response: %v", err)
+		}
+		
+		// 检查是否包含换行符，如果没有换行符可能是不规范的单一响应
+		if !bytes.Contains(firstLine, []byte("\n")) && err == io.EOF {
+			// 处理不规范的响应，直接读取所有数据
+			allData, readErr := io.ReadAll(reader)
+			if readErr != nil {
+				return totalBytes, fmt.Errorf("error reading non-standard SSE response: %v", readErr)
+			}
+			
+			// 应用 hooks
+			flush := true
+			processedData := allData
+			for _, f := range hooks {
+				flush, processedData = f(processedData)
+			}
+			
+			if flush {
+				n, writeErr := w.Write(processedData)
+				if writeErr != nil {
+					return totalBytes, fmt.Errorf("error writing response: %v", writeErr)
+				}
+				totalBytes += int64(n)
+				
+				// 刷新响应
+				if f, ok := w.(http.Flusher); ok {
+					f.Flush()
+				}
+			}
+			
+			return totalBytes, nil
+		}
+		
+		// 标准 SSE 流处理
 		for {
 			line, err := reader.ReadBytes('\n')
 			if err != nil {
 				if err != io.EOF {
 					return totalBytes, fmt.Errorf("error streaming response: %v", err)
+				}
+				// 如果遇到 EOF 但还有剩余数据，处理最后一行
+				if len(line) > 0 {
+					flush := true
+					processedLine := line
+					for _, f := range hooks {
+						flush, processedLine = f(processedLine)
+					}
+					if flush {
+						n, err := w.Write(processedLine)
+						if err != nil {
+							return totalBytes, fmt.Errorf("error writing final line: %v", err)
+						}
+						totalBytes += int64(n)
+					}
 				}
 				return totalBytes, nil
 			}
@@ -280,6 +334,6 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 		}
 		totalBytes += n
 	}
-	
+
 	return totalBytes, nil
 }
