@@ -195,7 +195,9 @@ func (r *Response) Stream() (chan string, error) {
 
 type ResponseHook func(data []byte) (flush bool, newData []byte)
 
-func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...ResponseHook) {
+func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...ResponseHook) (int64, error) {
+	var totalBytes int64
+	
 	w.WriteHeader(r.statusCode)
 	for k, v := range r.RawResponse.Header {
 		w.Header()[k] = v
@@ -206,9 +208,9 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 			line, err := reader.ReadBytes('\n')
 			if err != nil {
 				if err != io.EOF {
-					http.Error(w, fmt.Sprintf("Error streaming response: %v", err), http.StatusInternalServerError)
+					return totalBytes, fmt.Errorf("error streaming response: %v", err)
 				}
-				return
+				return totalBytes, nil
 			}
 
 			// 保存原始的换行符
@@ -220,10 +222,11 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 
 			if len(trimmedLine) == 0 {
 				// 如果是空行，直接写入原始内容
-				if _, err := w.Write(originalLine); err != nil {
-					http.Error(w, fmt.Sprintf("Error writing response: %v", err), http.StatusInternalServerError)
-					return
+				n, err := w.Write(originalLine)
+				if err != nil {
+					return totalBytes, fmt.Errorf("error writing response: %v", err)
 				}
+				totalBytes += int64(n)
 			} else {
 				flush := true
 				processedLine := trimmedLine
@@ -240,10 +243,11 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 				}
 
 				// 写入响应，保持原有换行符
-				if _, err := w.Write(processedLine); err != nil {
-					http.Error(w, fmt.Sprintf("Error writing response: %v", err), http.StatusInternalServerError)
-					return
+				n, err := w.Write(processedLine)
+				if err != nil {
+					return totalBytes, fmt.Errorf("error writing response: %v", err)
 				}
+				totalBytes += int64(n)
 			}
 
 			// 刷新响应
@@ -257,10 +261,11 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 		for _, f := range hooks {
 			_, r.body = f(r.body)
 		}
-		if _, err := w.Write(r.body); err != nil {
-			http.Error(w, fmt.Sprintf("Error writing response: %v", err), http.StatusInternalServerError)
-			return
+		n, err := w.Write(r.body)
+		if err != nil {
+			return totalBytes, fmt.Errorf("error writing response: %v", err)
 		}
+		totalBytes += int64(n)
 	} else {
 		if len(hooks) > 0 {
 			body, _ := io.ReadAll(r.RawResponse.Body)
@@ -269,9 +274,12 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 			}
 			r.RawResponse.Body = io.NopCloser(bytes.NewBuffer(body))
 		}
-		if _, err := io.Copy(w, r.RawResponse.Body); err != nil {
-			http.Error(w, fmt.Sprintf("Error copying response: %v", err), http.StatusInternalServerError)
-			return
+		n, err := io.Copy(w, r.RawResponse.Body)
+		if err != nil {
+			return totalBytes, fmt.Errorf("error copying response: %v", err)
 		}
+		totalBytes += n
 	}
+	
+	return totalBytes, nil
 }
