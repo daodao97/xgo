@@ -117,22 +117,7 @@ func (r *Response) StatusCode() int {
 
 func (r *Response) String() string {
 	r.parseResponse()
-	if r.parsed {
-		return string(r.body)
-	}
-
-	body, _ := io.ReadAll(r.RawResponse.Body)
-	r.RawResponse.Body.Close()
-	r.RawResponse.Body = io.NopCloser(bytes.NewBuffer(body))
-	r.body = body
-	r.parsed = true
 	return string(r.body)
-}
-
-// Deprecated: use Json instead
-func (r *Response) JSON() *xjson.Json {
-	r.parseResponse()
-	return xjson.New(r.body)
 }
 
 func (r *Response) Json() *xjson.Json {
@@ -170,7 +155,7 @@ func (r *Response) Headers() http.Header {
 	return r.RawResponse.Header
 }
 
-func (r *Response) SSE() (chan string, error) {
+func (r *Response) Stream() (chan string, error) {
 	if !strings.Contains(r.RawResponse.Header.Get("Content-Type"), "text/event-stream") {
 		return nil, &xcode.Code{
 			HttpCode: http.StatusBadRequest,
@@ -206,10 +191,6 @@ func (r *Response) SSE() (chan string, error) {
 	}()
 
 	return messages, nil
-}
-
-func (r *Response) Stream() (chan string, error) {
-	return r.SSE()
 }
 
 type ResponseHook func(data []byte) (flush bool, newData []byte)

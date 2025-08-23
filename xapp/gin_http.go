@@ -97,6 +97,11 @@ func NewGin(opts ...AppOption) *gin.Engine {
 	// r.Use(gin.Recovery())
 	r.Use(xtrace.TraceId())
 	r.Use(func(c *gin.Context) {
+		if !appOptions.PrintReqeustLog {
+			c.Next()
+			return
+		}
+
 		isStaticFile := isStaticFileRequest(c.Request.URL.Path)
 		if isStaticFile {
 			c.Next()
@@ -152,7 +157,7 @@ func NewGin(opts ...AppOption) *gin.Engine {
 			slog.String("method", c.Request.Method),
 			slog.String("path", c.Request.URL.Path),
 		}
-		
+
 		if c.Writer != nil {
 			args = append(args, slog.Int("status_code", c.Writer.Status()))
 		}
@@ -200,7 +205,7 @@ func NewGin(opts ...AppOption) *gin.Engine {
 			logFunc(c, "http request", args...)
 		}
 	})
-	
+
 	// Recovery 中间件放在最后，这样可以捕获所有中间件和业务逻辑中的 panic
 	r.Use(gin.CustomRecovery(func(c *gin.Context, err any) {
 		path := c.Request.URL.Path
