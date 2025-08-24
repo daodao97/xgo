@@ -25,6 +25,12 @@ XGO is a comprehensive Go framework providing modular components for web develop
 - `cd xadmin/adminui && npm run dev` - Start development server
 - `cd xadmin/adminui && npm run build` - Build for production
 
+### Package Testing
+- `go test ./xdb -v` - Test database package
+- `go test ./xjwt -v` - Test JWT package
+- `go test ./limiter -v` - Test limiter package
+- `go test ./xqueue -v` - Test queue package
+
 ## Architecture
 
 ### Core Framework Components
@@ -36,11 +42,14 @@ XGO is a comprehensive Go framework providing modular components for web develop
 
 ### Specialized Modules
 - **xadmin**: Auto-generated CRUD admin interface with Vue.js frontend
-- **xcache**: Multi-backend caching (memory, Redis)
+- **cache**: Multi-backend caching interfaces (memory, Redis)
 - **xqueue**: Message queue implementation (Redis-based)
-- **xlimiter**: Rate limiting with sliding window and concurrency controls
+- **limiter**: Rate limiting with sliding window and concurrency controls
 - **xproxy**: HTTP proxy and static file serving
 - **xredis**: Redis utilities and connection management
+- **xcron**: Cron job scheduling with logging support
+- **xtrace**: Request tracing utilities for Gin
+- **xrequest**: HTTP client with retry and proxy support
 
 ### Database Layer (xdb)
 - Model-based ORM with chainable query builder
@@ -130,5 +139,23 @@ The project uses standard Go modules with key dependencies:
 - Gin for HTTP routing
 - GORM-style database operations (custom implementation)
 - Redis for caching and queues
-- JWT libraries for authentication
-- Vue.js for admin frontend
+- JWT libraries for authentication (HMAC & RSA)
+- Vue.js 3 + Element Plus for admin frontend
+- Testify for testing assertions
+- Cron v3 for job scheduling
+
+## Key Architectural Patterns
+
+### Model Interface Design
+The xdb package uses a unified Model interface that supports:
+- Chainable query building with fluent API
+- Context-aware operations for request tracing
+- Transaction support with automatic rollback
+- Built-in caching layer with Redis backing
+- Hook system for data validation and transformation
+
+### Admin System Architecture
+- Schema-driven approach using JSON configuration
+- Hook-based customization (BeforeCreate, AfterList, etc.)
+- Vue.js SPA with Monaco editor integration
+- RESTful API auto-generation from model definitions

@@ -213,10 +213,14 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 		
 		// 检查是否包含换行符，如果没有换行符可能是不规范的单一响应
 		if !bytes.Contains(firstLine, []byte("\n")) && err == io.EOF {
-			// 处理不规范的响应，直接读取所有数据
+			// 处理不规范的响应，修正 Content-Type 为 application/json
+			r.RawResponse.Header.Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", "application/json")
+			
+			// 读取所有数据
 			allData, readErr := io.ReadAll(reader)
 			if readErr != nil {
-				return totalBytes, fmt.Errorf("error reading non-standard SSE response: %v", readErr)
+				return totalBytes, fmt.Errorf("error reading non-standard response: %v", readErr)
 			}
 			
 			// 应用 hooks
@@ -232,11 +236,6 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 					return totalBytes, fmt.Errorf("error writing response: %v", writeErr)
 				}
 				totalBytes += int64(n)
-				
-				// 刷新响应
-				if f, ok := w.(http.Flusher); ok {
-					f.Flush()
-				}
 			}
 			
 			return totalBytes, nil
