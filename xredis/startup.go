@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 type Options struct {
@@ -69,7 +69,7 @@ func Inits(conf []Options) error {
 				PoolTimeout:     conf.PoolTimeout,
 				ReadTimeout:     conf.ReadTimeout,
 				WriteTimeout:    conf.WriteTimeout,
-				IdleTimeout:     conf.IdleTimeout,
+				ConnMaxIdleTime: conf.IdleTimeout,
 				MaxRetries:      conf.MaxRetries,
 				MinRetryBackoff: conf.MinRetryBackoff,
 				MaxRetryBackoff: conf.MaxRetryBackoff,
@@ -85,7 +85,7 @@ func Inits(conf []Options) error {
 				PoolTimeout:     conf.PoolTimeout,
 				ReadTimeout:     conf.ReadTimeout,
 				WriteTimeout:    conf.WriteTimeout,
-				IdleTimeout:     conf.IdleTimeout,
+				ConnMaxIdleTime: conf.IdleTimeout,
 				MaxRetries:      conf.MaxRetries,
 				MinRetryBackoff: conf.MinRetryBackoff,
 				MaxRetryBackoff: conf.MaxRetryBackoff,

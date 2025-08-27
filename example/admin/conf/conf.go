@@ -6,7 +6,7 @@ import (
 
 	"github.com/daodao97/xgo/utils"
 	"github.com/daodao97/xgo/xdb"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/daodao97/xgo/xconf"
 	"github.com/daodao97/xgo/xlog"

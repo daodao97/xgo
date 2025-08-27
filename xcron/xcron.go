@@ -7,7 +7,7 @@ import (
 
 	"github.com/daodao97/xgo/xlog"
 	"github.com/daodao97/xgo/xutil"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
 )
 
