@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 type RedisOption func(c *RedisCache)
@@ -18,7 +18,7 @@ func WithPrefix(prefix string) RedisOption {
 
 // RedisCache 是一个基于 Redis 的缓存实现
 type RedisCache struct {
-	client *redis.Client
+	client redis.UniversalClient
 	prefix string
 }
 
@@ -44,7 +44,7 @@ func NewRedisCache(options *redis.Options, option ...RedisOption) *RedisCache {
 }
 
 // NewRedis 创建一个新的 RedisCache 实例
-func NewRedis(client *redis.Client, option ...RedisOption) *RedisCache {
+func NewRedis(client redis.UniversalClient, option ...RedisOption) *RedisCache {
 	// 检查是否能连接到 Redis 服务器
 	_, err := client.Ping(context.Background()).Result()
 	if err != nil {
