@@ -25,7 +25,7 @@ type Cron struct {
 	name string
 	jobs []Job
 	cron *cron.Cron
-	rdb  *redis.Client
+	rdb  redis.UniversalClient
 }
 
 type Option func(*Cron)
@@ -36,7 +36,7 @@ func WithName(name string) Option {
 	}
 }
 
-func WithRdb(rdb *redis.Client) Option {
+func WithRdb(rdb redis.UniversalClient) Option {
 	return func(c *Cron) {
 		c.rdb = rdb
 	}
