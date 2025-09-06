@@ -13,11 +13,11 @@ type SlidingWindowLimiter struct {
 	KeyPrefix   string
 	Limit       int           // 时间窗口内允许的最大请求数
 	WindowSize  time.Duration // 时间窗口大小
-	redisClient *redis.Client
+	redisClient redis.UniversalClient
 }
 
 // NewSlidingWindowLimiter 创建一个新的滑动窗口限流器
-func NewSlidingWindowLimiter(keyPrefix string, limit int, windowSize time.Duration, redisClient *redis.Client) *SlidingWindowLimiter {
+func NewSlidingWindowLimiter(keyPrefix string, limit int, windowSize time.Duration, redisClient redis.UniversalClient) *SlidingWindowLimiter {
 	return &SlidingWindowLimiter{
 		KeyPrefix:   keyPrefix,
 		Limit:       limit,

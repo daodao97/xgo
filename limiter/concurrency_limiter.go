@@ -10,7 +10,7 @@ import (
 
 // 并发控制器
 
-func NewConcurrencyLimiter(keyPrefix string, concurrentLimit int, redisClient *redis.Client) *ConcurrencyLimiter {
+func NewConcurrencyLimiter(keyPrefix string, concurrentLimit int, redisClient redis.UniversalClient) *ConcurrencyLimiter {
 	return &ConcurrencyLimiter{
 		KeyPrefix:       keyPrefix,
 		ConcurrentLimit: concurrentLimit,
@@ -21,7 +21,7 @@ func NewConcurrencyLimiter(keyPrefix string, concurrentLimit int, redisClient *r
 type ConcurrencyLimiter struct {
 	KeyPrefix       string
 	ConcurrentLimit int
-	redisClient     *redis.Client
+	redisClient     redis.UniversalClient
 }
 
 func (l *ConcurrencyLimiter) CanProcess(ctx context.Context, userID, resourceID string) bool {
