@@ -50,6 +50,10 @@ func authMiddleware() gin.HandlerFunc {
 		}
 
 		token := c.GetHeader("X-Token")
+		cookieToken, _ := c.Cookie("oms:token")
+		if cookieToken != "" {
+			token = cookieToken
+		}
 		if token == "" {
 			c.JSON(http.StatusOK, gin.H{"code": 401, "message": "Unauthorized: token is required"})
 			c.Abort()
