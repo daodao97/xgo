@@ -7,7 +7,7 @@ import (
 
 	"github.com/daodao97/xgo/xlog"
 	"github.com/daodao97/xgo/xutil"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
 )
 
@@ -25,7 +25,7 @@ type Cron struct {
 	name string
 	jobs []Job
 	cron *cron.Cron
-	rdb  *redis.Client
+	rdb  redis.UniversalClient
 }
 
 type Option func(*Cron)
@@ -36,7 +36,7 @@ func WithName(name string) Option {
 	}
 }
 
-func WithRdb(rdb *redis.Client) Option {
+func WithRdb(rdb redis.UniversalClient) Option {
 	return func(c *Cron) {
 		c.rdb = rdb
 	}

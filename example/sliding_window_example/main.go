@@ -9,7 +9,7 @@ import (
 
 	"github.com/daodao97/xgo/limiter"
 	"github.com/gin-gonic/gin"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
