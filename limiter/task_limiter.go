@@ -10,7 +10,7 @@ import (
 
 // 任务计数器
 
-func NewTaskLimiter(windowHours int, maxRequests int, redisClient *redis.Client) *TaskLimiter {
+func NewTaskLimiter(windowHours int, maxRequests int, redisClient redis.UniversalClient) *TaskLimiter {
 	return &TaskLimiter{
 		WindowHours: windowHours,
 		MaxRequests: maxRequests,
@@ -22,7 +22,7 @@ type TaskLimiter struct {
 	WindowHours int
 	MaxRequests int
 	KeyPrefix   string
-	redisClient *redis.Client
+	redisClient redis.UniversalClient
 }
 
 func (l *TaskLimiter) CanProcess(ctx context.Context, userID, resourceID string) bool {
