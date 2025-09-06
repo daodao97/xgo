@@ -50,7 +50,7 @@ func authMiddleware() gin.HandlerFunc {
 		}
 
 		token := c.GetHeader("X-Token")
-		cookieToken, _ := c.Cookie("oms:token")
+		cookieToken, _ := c.Cookie("oms%3Atoken")
 		if cookieToken != "" {
 			token = cookieToken
 		}
