@@ -54,7 +54,7 @@ func (l *SlidingWindowLimiter) Process(ctx context.Context, userID, resourceID s
 	now := time.Now()
 
 	// 添加当前请求的时间戳到有序集合
-	_, err := l.redisClient.ZAdd(ctx, key, &redis.Z{
+	_, err := l.redisClient.ZAdd(ctx, key, redis.Z{
 		Score:  float64(now.UnixNano()),
 		Member: now.UnixNano(),
 	}).Result()

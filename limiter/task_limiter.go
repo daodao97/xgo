@@ -38,7 +38,7 @@ func (l *TaskLimiter) Process(ctx context.Context, userID, resourceID string) bo
 	if !l.CanProcess(ctx, userID, resourceID) {
 		return false
 	}
-	l.redisClient.ZAdd(ctx, l.GetKey(userID, resourceID), &redis.Z{
+	l.redisClient.ZAdd(ctx, l.GetKey(userID, resourceID), redis.Z{
 		Score:  float64(time.Now().Unix()),
 		Member: time.Now().UnixNano(),
 	})
