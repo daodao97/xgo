@@ -27,6 +27,7 @@ type Response struct {
 	statusCode  int
 	body        []byte
 	parsed      bool
+	isStream    bool
 }
 
 func (r *Response) BodyIsEmpty() bool {
@@ -195,6 +196,12 @@ func (r *Response) Stream() (chan string, error) {
 
 type ResponseHook func(data []byte) (flush bool, newData []byte)
 
+func (r *Response) ToHttpResponseWriterWihtStream(w http.ResponseWriter, isStream bool, hooks ...ResponseHook) (int64, error) {
+	r.isStream = isStream
+
+	return r.ToHttpResponseWriter(w, hooks...)
+}
+
 func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...ResponseHook) (int64, error) {
 	var totalBytes int64
 
@@ -202,34 +209,39 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 	for k, v := range r.RawResponse.Header {
 		w.Header()[k] = v
 	}
-	if strings.Contains(r.RawResponse.Header.Get("Content-Type"), "text/event-stream") {
+
+	if r.StatusCode() >= http.StatusBadRequest {
+		return r.notStreamResponse(w, hooks...)
+	}
+
+	if strings.Contains(r.RawResponse.Header.Get("Content-Type"), "text/event-stream") || r.isStream {
 		reader := bufio.NewReader(r.RawResponse.Body)
-		
+
 		// 尝试读取第一行来判断是否为真正的 SSE 格式
 		firstLine, err := reader.Peek(1024) // 预读取更多数据以判断格式
 		if err != nil && err != io.EOF {
 			return totalBytes, fmt.Errorf("error peeking response: %v", err)
 		}
-		
+
 		// 检查是否包含换行符，如果没有换行符可能是不规范的单一响应
 		if !bytes.Contains(firstLine, []byte("\n")) && err == io.EOF {
 			// 处理不规范的响应，修正 Content-Type 为 application/json
 			r.RawResponse.Header.Set("Content-Type", "application/json")
 			w.Header().Set("Content-Type", "application/json")
-			
+
 			// 读取所有数据
 			allData, readErr := io.ReadAll(reader)
 			if readErr != nil {
 				return totalBytes, fmt.Errorf("error reading non-standard response: %v", readErr)
 			}
-			
+
 			// 应用 hooks
 			flush := true
 			processedData := allData
 			for _, f := range hooks {
 				flush, processedData = f(processedData)
 			}
-			
+
 			if flush {
 				n, writeErr := w.Write(processedData)
 				if writeErr != nil {
@@ -237,10 +249,10 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 				}
 				totalBytes += int64(n)
 			}
-			
+
 			return totalBytes, nil
 		}
-		
+
 		// 标准 SSE 流处理
 		for {
 			line, err := reader.ReadBytes('\n')
@@ -310,6 +322,15 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 		}
 	}
 
+	totalBytes, err := r.notStreamResponse(w, hooks...)
+	if err != nil {
+		return 0, err
+	}
+	return totalBytes, nil
+}
+
+func (r *Response) notStreamResponse(w http.ResponseWriter, hooks ...ResponseHook) (int64, error) {
+	totalBytes := int64(0)
 	if r.parsed {
 		for _, f := range hooks {
 			_, r.body = f(r.body)
