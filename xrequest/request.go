@@ -305,11 +305,11 @@ func (r *Request) do() (*Response, error) {
 	if client == nil {
 		client = GetDefaultProxyClient()
 	}
-	if r.proxy != "" {
-		client.Transport = &http.Transport{Proxy: func(_ *http.Request) (*url.URL, error) {
-			return url.Parse(r.proxy)
-		}}
-	}
+    if r.proxy != "" {
+        if u, err := url.Parse(r.proxy); err == nil {
+            client.Transport = &http.Transport{Proxy: proxyWithNoProxy(u)}
+        }
+    }
 	if r.timeout > 0 {
 		client.Timeout = r.timeout
 	}

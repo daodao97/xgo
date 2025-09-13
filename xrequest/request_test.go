@@ -129,7 +129,7 @@ func TestRequestSSE(t *testing.T) {
 	}
 	t.Log(resp.StatusCode())
 
-	ch, err := resp.SSE()
+	ch, err := resp.Stream()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,6 +172,21 @@ func TestRequestWithProxy(t *testing.T) {
 
 	req := New()
 	resp, err := req.SetRetry(3, time.Second).Post("https://ipinfo.io")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(resp.StatusCode())
+	t.Log(resp.Json())
+}
+
+func TestRequestWithProxyWarp(t *testing.T) {
+	// export HTTP_PROXY=http://127.0.0.1:8000
+	fmt.Println("HTTP_PROXY", os.Getenv("HTTP_PROXY"))
+	fmt.Println("HTTPS_PROXY", os.Getenv("HTTPS_PROXY"))
+	fmt.Println("ALL_PROXY", os.Getenv("ALL_PROXY"))
+
+	req := New()
+	resp, err := req.SetRetry(3, time.Second).Post("https://cloudflare.com/cdn-cgi/trace")
 	if err != nil {
 		t.Fatal(err)
 	}
