@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 
@@ -12,7 +13,7 @@ import (
 	"github.com/daodao97/xgo/xjwt"
 	"github.com/daodao97/xgo/xlog"
 
-	"github.com/gorilla/mux"
+	"github.com/tidwall/gjson"
 	"golang.org/x/crypto/bcrypt"
 	"muzzammil.xyz/jsonc"
 )
@@ -53,16 +54,6 @@ type User struct {
 	Password string
 }
 
-func UserRoute(r *mux.Router) {
-	apiRouter := r.PathPrefix("/user").Subrouter()
-
-	apiRouter.HandleFunc("/login", loginHandler).Methods("POST")
-	apiRouter.HandleFunc("/info", infoHandler).Methods("GET")
-	apiRouter.HandleFunc("/routes", routesHandler).Methods("GET")
-	apiRouter.HandleFunc("/logout", logoutHandler).Methods("GET")
-	apiRouter.HandleFunc("/form_mutex", formMutexHandler).Methods("GET")
-}
-
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	user, err := xhttp.DecodeBody[User](r)
 	if err != nil {
@@ -101,6 +92,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	token, err := xjwt.GenHMacToken(jwt.MapClaims{
 		"username": row.GetString("username"),
 		"user_id":  row.GetInt("id"),
+		"role":     row.GetString("role"),
 	}, _jwtConf.Secret)
 	if err != nil {
 		xhttp.ResponseJson(w, Map{
@@ -152,15 +144,62 @@ func infoHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func routesHandler(w http.ResponseWriter, r *http.Request) {
-	var data any
-	err := jsonc.Unmarshal([]byte(routes), &data)
+	token := r.Header.Get("x-token")
+	if token == "" {
+		xhttp.ResponseJson(w, Map{
+			"code": 401,
+			"msg":  "Unauthorized",
+		})
+		return
+	}
+
+	payload, err := xjwt.VerifyHMacToken(token, _jwtConf.Secret)
 	if err != nil {
-		xlog.Error("xadmin route unmarshal error", xlog.Err(err))
+		xhttp.ResponseJson(w, Map{
+			"code": 401,
+			"msg":  "Unauthorized",
+		})
+		return
+	}
+
+	userID, ok := payload["user_id"].(float64)
+	if !ok {
+		xhttp.ResponseJson(w, Map{
+			"code": 401,
+			"msg":  "Unauthorized",
+		})
+		return
+	}
+
+	row, err := xdb.New(operatorTable).Single(xdb.WhereEq("id", int(userID)))
+	if err != nil {
+		xhttp.ResponseJson(w, Map{
+			"code": 401,
+			"msg":  "Unauthorized",
+		})
+		return
+	}
+
+	roles := parseRoleSet(row.GetString("role"))
+
+	jsonBytes := jsonc.ToJSON([]byte(routes))
+	if !gjson.ValidBytes(jsonBytes) {
+		xlog.Error("xadmin routes json invalid")
+		xhttp.ResponseJson(w, Map{
+			"code": 0,
+			"data": []any{},
+		})
+		return
+	}
+
+	filtered := filterRoutesResult(gjson.ParseBytes(jsonBytes), roles)
+	if filtered == nil {
+		filtered = []any{}
 	}
 
 	xhttp.ResponseJson(w, Map{
 		"code": 0,
-		"data": data,
+		"data": filtered,
 	})
 }
 
@@ -184,4 +223,114 @@ func PasswordHash(password string) string {
 
 func PasswordVerify(password, hash string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+}
+
+func parseRoleSet(role string) map[string]struct{} {
+	result := make(map[string]struct{})
+	for _, item := range strings.Split(role, ",") {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		result[trimmed] = struct{}{}
+	}
+	return result
+}
+
+func filterRoutesResult(result gjson.Result, roles map[string]struct{}) any {
+	if !result.Exists() {
+		return nil
+	}
+
+	if result.IsArray() {
+		items := result.Array()
+		filtered := make([]any, 0, len(items))
+		for _, item := range items {
+			switch {
+			case item.IsObject():
+				if obj, ok := filterRouteObject(item, roles); ok {
+					filtered = append(filtered, obj)
+				}
+			case item.IsArray():
+				nested := filterRoutesResult(item, roles)
+				if nested != nil {
+					filtered = append(filtered, nested)
+				}
+			default:
+				filtered = append(filtered, item.Value())
+			}
+		}
+		return filtered
+	}
+
+	if result.IsObject() {
+		if obj, ok := filterRouteObject(result, roles); ok {
+			return obj
+		}
+		return nil
+	}
+
+	return result.Value()
+}
+
+func filterRouteObject(route gjson.Result, roles map[string]struct{}) (map[string]any, bool) {
+	roleValue := route.Get("role")
+	if roleValue.Exists() && !routeAllowedResult(roleValue, roles) {
+		return nil, false
+	}
+
+	data := route.Map()
+	filtered := make(map[string]any, len(data))
+	for key, value := range data {
+		if key == "routes" {
+			nested := filterRoutesResult(value, roles)
+			if nested == nil && value.Exists() {
+				filtered[key] = []any{}
+				continue
+			}
+			if nested != nil {
+				filtered[key] = nested
+			}
+			continue
+		}
+		filtered[key] = value.Value()
+	}
+
+	return filtered, true
+}
+
+func routeAllowedResult(roleValue gjson.Result, roles map[string]struct{}) bool {
+	if len(roles) == 0 {
+		return false
+	}
+
+	if roleValue.Type == gjson.String {
+		for _, item := range strings.Split(roleValue.Str, ",") {
+			trimmed := strings.TrimSpace(item)
+			if trimmed == "" {
+				continue
+			}
+			if _, ok := roles[trimmed]; ok {
+				return true
+			}
+		}
+		return false
+	}
+
+	if roleValue.IsArray() {
+		for _, item := range roleValue.Array() {
+			if item.Type != gjson.String {
+				continue
+			}
+			trimmed := strings.TrimSpace(item.Str)
+			if trimmed == "" {
+				continue
+			}
+			if _, ok := roles[trimmed]; ok {
+				return true
+			}
+		}
+	}
+
+	return false
 }
