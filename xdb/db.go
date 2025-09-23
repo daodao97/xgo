@@ -10,14 +10,14 @@ import (
 )
 
 type Config struct {
-	Name            string
-	DSN             string
-	ReadDsn         string
-	Driver          string
-	MaxOpenConn     int
-	MaxIdleConn     int
-	ConnMaxIdleTime time.Duration
-	ConnMaxLifetime time.Duration
+	Name            string        `json:"name" yaml:"name"`
+	DSN             string        `json:"dsn" yaml:"dsn"`
+	ReadDsn         string        `json:"read_dsn" yaml:"read_dsn"`
+	Driver          string        `json:"driver" yaml:"driver"`
+	MaxOpenConn     int           `json:"max_open_conn" yaml:"max_open_conn"`
+	MaxIdleConn     int           `json:"max_idle_conn" yaml:"max_idle_conn"`
+	ConnMaxIdleTime time.Duration `json:"conn_max_idle_time" yaml:"conn_max_idle_time"`
+	ConnMaxLifetime time.Duration `json:"conn_max_lifetime" yaml:"conn_max_lifetime"`
 }
 
 var pool = sync.Map{}
