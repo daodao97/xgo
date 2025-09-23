@@ -121,6 +121,15 @@ func WhereRaw(raw string) Option {
 	}
 }
 
+func WhereOrRaw(raw string) Option {
+	return func(opts *Options) {
+		opts.where = append(opts.where, where{
+			raw:   raw,
+			logic: "or",
+		})
+	}
+}
+
 func Where(field, operator string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
@@ -334,45 +343,19 @@ func WhereOrNotIn(field string, value []any) Option {
 }
 
 func WhereIsNil(field string) Option {
-	return func(opts *Options) {
-		opts.where = append(opts.where, where{
-			field:    field,
-			operator: "is",
-			value:    nil,
-		})
-	}
+	return WhereRaw(field + " is null")
 }
 
 func WhereNotNil(field string) Option {
-	return func(opts *Options) {
-		opts.where = append(opts.where, where{
-			field:    field,
-			operator: "is not",
-			value:    nil,
-		})
-	}
+	return WhereRaw(field + " is not null")
 }
 
 func WhereOrIsNil(field string) Option {
-	return func(opts *Options) {
-		opts.where = append(opts.where, where{
-			field:    field,
-			operator: "is",
-			value:    nil,
-			logic:    "or",
-		})
-	}
+	return WhereOrRaw(field + " is null")
 }
 
 func WhereOrNotNil(field string) Option {
-	return func(opts *Options) {
-		opts.where = append(opts.where, where{
-			field:    field,
-			operator: "is not",
-			value:    nil,
-			logic:    "or",
-		})
-	}
+	return WhereOrRaw(field + " is not null")
 }
 
 func WhereGroup(opts ...Option) Option {
