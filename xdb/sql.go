@@ -333,6 +333,48 @@ func WhereOrNotIn(field string, value []any) Option {
 	}
 }
 
+func WhereIsNil(field string) Option {
+	return func(opts *Options) {
+		opts.where = append(opts.where, where{
+			field:    field,
+			operator: "is",
+			value:    nil,
+		})
+	}
+}
+
+func WhereNotNil(field string) Option {
+	return func(opts *Options) {
+		opts.where = append(opts.where, where{
+			field:    field,
+			operator: "is not",
+			value:    nil,
+		})
+	}
+}
+
+func WhereOrIsNil(field string) Option {
+	return func(opts *Options) {
+		opts.where = append(opts.where, where{
+			field:    field,
+			operator: "is",
+			value:    nil,
+			logic:    "or",
+		})
+	}
+}
+
+func WhereOrNotNil(field string) Option {
+	return func(opts *Options) {
+		opts.where = append(opts.where, where{
+			field:    field,
+			operator: "is not",
+			value:    nil,
+			logic:    "or",
+		})
+	}
+}
+
 func WhereGroup(opts ...Option) Option {
 	opt := &Options{}
 	for _, v := range opts {
