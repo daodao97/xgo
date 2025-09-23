@@ -4,17 +4,20 @@ import (
 	"database/sql"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 )
 
 type Config struct {
-	Name        string
-	DSN         string
-	ReadDsn     string
-	Driver      string
-	MaxOpenConn int
-	MaxIdleConn int
+	Name            string
+	DSN             string
+	ReadDsn         string
+	Driver          string
+	MaxOpenConn     int
+	MaxIdleConn     int
+	ConnMaxIdleTime time.Duration
+	ConnMaxLifetime time.Duration
 }
 
 var pool = sync.Map{}
@@ -45,10 +48,12 @@ func Init(conns map[string]*Config) error {
 		pool.Store(conn, db)
 		if conf.ReadDsn != "" {
 			rdb, err := NewDb(&Config{
-				DSN:         conf.ReadDsn,
-				Driver:      conf.Driver,
-				MaxOpenConn: conf.MaxOpenConn,
-				MaxIdleConn: conf.MaxIdleConn,
+				DSN:             conf.ReadDsn,
+				Driver:          conf.Driver,
+				MaxOpenConn:     conf.MaxOpenConn,
+				MaxIdleConn:     conf.MaxIdleConn,
+				ConnMaxIdleTime: conf.ConnMaxIdleTime,
+				ConnMaxLifetime: conf.ConnMaxLifetime,
 			})
 			if err != nil {
 				return err
@@ -111,6 +116,14 @@ func NewDb(conf *Config) (*DbPool, error) {
 		MaxIdle = conf.MaxIdleConn
 	}
 	db.SetMaxIdleConns(MaxIdle)
+
+	if conf.ConnMaxIdleTime > 0 {
+		db.SetConnMaxIdleTime(conf.ConnMaxIdleTime)
+	}
+
+	if conf.ConnMaxLifetime > 0 {
+		db.SetConnMaxLifetime(conf.ConnMaxLifetime)
+	}
 	return &DbPool{
 		db:   db,
 		conf: conf,
