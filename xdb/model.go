@@ -748,7 +748,7 @@ func (m *model) Delete(opt ...Option) (ok bool, err error) {
 	defer dbLog(m.ctx, "Delete", time.Now(), &err, &kv)
 
 	_sql, args := DeleteBuilder(opt...)
-	kv = append(kv, "slq", _sql, "args", args)
+	kv = append(kv, "sql", _sql, "args", args)
 
 	if m.config.Driver == "postgres" {
 		_sql = convertPlaceholders(_sql)

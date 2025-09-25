@@ -117,6 +117,8 @@ func NewDb(conf *Config) (*DbPool, error) {
 	}
 	db.SetMaxIdleConns(MaxIdle)
 
+	fmt.Println("xxxx", conf.ConnMaxIdleTime, conf.ConnMaxLifetime)
+
 	if conf.ConnMaxIdleTime > 0 {
 		db.SetConnMaxIdleTime(conf.ConnMaxIdleTime)
 	}
