@@ -158,11 +158,6 @@ func (c *Cron) executeWithLock(job Job) func() {
 			lockTimeout = 5 * time.Minute
 		}
 
-		retryDelay := job.LockRetryDelay
-		if retryDelay == 0 {
-			retryDelay = 1 * time.Second
-		}
-
 		lockKey := fmt.Sprintf("xcron:lock:%s:%s", c.name, job.Name)
 		ctx := context.Background()
 
@@ -170,23 +165,13 @@ func (c *Cron) executeWithLock(job Job) func() {
 		var acquired bool
 		var err error
 
-		for i := 0; i < 3; i++ { // Maximum 3 retry attempts
-			acquired, err = c.tryLock(ctx, lockKey, lockTimeout)
-			if err != nil {
-				xlog.Warn("error trying to acquire lock",
-					xlog.String("job", job.Name),
-					xlog.String("key", lockKey),
-					xlog.String("error", err.Error()))
-				return
-			}
-
-			if acquired {
-				break
-			}
-
-			if i < 2 { // Don't sleep on the last attempt
-				time.Sleep(retryDelay)
-			}
+		acquired, err = c.tryLock(ctx, lockKey, lockTimeout)
+		if err != nil {
+			xlog.Warn("error trying to acquire lock",
+				xlog.String("job", job.Name),
+				xlog.String("key", lockKey),
+				xlog.String("error", err.Error()))
+			return
 		}
 
 		if !acquired {
