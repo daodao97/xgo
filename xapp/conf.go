@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/daodao97/xgo/xenv"
 	"github.com/daodao97/xgo/xlog"
 	"github.com/daodao97/xgo/xutil"
 	"github.com/fsnotify/fsnotify"
@@ -82,6 +83,11 @@ func InitConf(dest any) error {
 	if err != nil {
 		return err
 	}
+
+	if !xenv.IsDev() {
+		return nil
+	}
+
 	xlog.Info("init config", xlog.String("files", strings.Join(confFiles, ",")))
 	// 创建文件监听器
 	watcher, err := fsnotify.NewWatcher()
