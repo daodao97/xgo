@@ -240,7 +240,7 @@ func (r *Request) Do() (resp *Response, err error) {
 	var lastErr error
 	for attempt := uint(1); attempt <= r.retryAttempts; attempt++ {
 		resp, err = r.do()
-		
+
 		if !r.shouldRetry(resp, err) {
 			return resp, err
 		}
@@ -254,7 +254,7 @@ func (r *Request) Do() (resp *Response, err error) {
 	if lastErr != nil {
 		return resp, lastErr
 	}
-	
+
 	if resp != nil && resp.StatusCode() >= http.StatusInternalServerError {
 		return resp, fmt.Errorf("request failed after %d attempts, status: %d", r.retryAttempts, resp.StatusCode())
 	}
@@ -305,11 +305,11 @@ func (r *Request) do() (*Response, error) {
 	if client == nil {
 		client = GetDefaultProxyClient()
 	}
-    if r.proxy != "" {
-        if u, err := url.Parse(r.proxy); err == nil {
-            client.Transport = &http.Transport{Proxy: proxyWithNoProxy(u)}
-        }
-    }
+	if r.proxy != "" {
+		if u, err := url.Parse(r.proxy); err == nil {
+			client.Transport = &http.Transport{Proxy: proxyWithNoProxy(u)}
+		}
+	}
 	if r.timeout > 0 {
 		client.Timeout = r.timeout
 	}
@@ -418,7 +418,8 @@ func (r *Request) makeRequest(ctx context.Context) (*http.Request, error) {
 	}
 
 	for k, v := range r.headers {
-		req.Header[formatHeaderKey(k)] = []string{v}
+		// req.Header[formatHeaderKey(k)] = []string{v}
+		req.Header[k] = []string{v}
 	}
 
 	for k, v := range r.cookies {
