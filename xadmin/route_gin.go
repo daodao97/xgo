@@ -2,6 +2,7 @@ package xadmin
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -142,4 +143,22 @@ func GinDragSort(m xdb.Model, sortField string, sortMode DragSortMode) gin.Handl
 
 		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
 	}
+}
+
+type UserInfo struct {
+	UserId   int    `json:"user_id"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
+}
+
+func GetUserFormCtx(c *gin.Context) *UserInfo {
+	user, exist := c.Get("user")
+	if !exist {
+		return nil
+	}
+
+	userJosn, _ := json.Marshal(user)
+	var u UserInfo
+	json.Unmarshal(userJosn, &u)
+	return &u
 }
