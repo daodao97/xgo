@@ -192,9 +192,16 @@ func routesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filtered := filterRoutesResult(gjson.ParseBytes(jsonBytes), roles)
-	if filtered == nil {
-		filtered = []any{}
+	parsed := gjson.ParseBytes(jsonBytes)
+
+	var filtered any
+	if _, ok := roles["root"]; ok {
+		filtered = parsed.Value()
+	} else {
+		filtered = filterRoutesResult(parsed, roles)
+		if filtered == nil {
+			filtered = []any{}
+		}
 	}
 
 	xhttp.ResponseJson(w, Map{
