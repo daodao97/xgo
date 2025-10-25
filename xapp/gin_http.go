@@ -2,6 +2,7 @@ package xapp
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -296,7 +297,7 @@ func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error
 			c.ShouldBindUri(&req)
 			c.ShouldBindQuery(&req)
 			err3 := c.ShouldBind(&req)
-			if err3 != nil {
+			if err3 != nil && !errors.Is(err3, io.EOF) && !errors.Is(err3, io.ErrUnexpectedEOF) {
 				c.JSON(200, gin.H{
 					"code":    400,
 					"message": translateError(err3),
