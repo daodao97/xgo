@@ -588,6 +588,55 @@ if os.Getenv("ENV") == "development" {
 }
 ```
 
+### 6. 透传上游响应及错误排查
+
+```go
+import (
+    "github.com/daodao97/xgo/xlog"
+    "github.com/daodao97/xgo/xrequest"
+)
+
+func relayHandler(ctx *gin.Context, apiURL string, hooks ...xrequest.ResponseHook) {
+    resp, err := xrequest.New().
+        SetHeaders(map[string]string{
+            "Authorization": ctx.GetHeader("Authorization"),
+        }).
+        SetBody(ctx.Request.Body).
+        Post(apiURL)
+    if err != nil {
+        xlog.ErrorCtx(ctx, "上游请求失败", xlog.Any("error", err))
+        ctx.JSON(http.StatusBadGateway, gin.H{"msg": "upstream error"})
+        return
+    }
+
+    // 透传上游响应
+    totalBytes, writeErr := resp.ToHttpResponseWriter(ctx.Writer, hooks...)
+    if writeErr != nil {
+        if xrequest.IsClientDisconnected(writeErr) {
+            xlog.WarnCtx(ctx, "客户端已断开", xlog.Any("error", writeErr))
+            return // 下游已断开，不必继续写
+        }
+
+        xlog.ErrorCtx(ctx, "透传响应失败", xlog.Any("error", writeErr))
+        ctx.Status(http.StatusBadGateway)
+        return
+    }
+
+    // totalBytes 为成功写入下游的字节数
+    if totalBytes == 0 {
+        // 结合上游声明的 Content-Length 与实际内容判断
+        contentLen := resp.RawResponse.ContentLength
+        xlog.WarnCtx(ctx, "上游无内容或被 hook 丢弃",
+            xlog.Int("status", resp.StatusCode()),
+            xlog.Int64("upstream_content_length", contentLen),
+            xlog.Bool("body_is_empty", resp.BodyIsEmpty()),
+        )
+    }
+}
+```
+
+如果业务需要在写入前检查上游内容，可通过 `resp.BodyIsEmpty()`、`resp.Bytes()` 等方法获取原始数据，再决定是否透传或根据需求定制处理。
+
 ## 与其他 HTTP 客户端对比
 
 | 特性 | xrequest | net/http | resty | req |

@@ -196,6 +196,17 @@ func (r *Response) Stream() (chan string, error) {
 
 type ResponseHook func(data []byte) (flush bool, newData []byte)
 
+func copyResponseHeaders(dst, src http.Header) {
+	if dst == nil || src == nil {
+		return
+	}
+	for key, values := range src {
+		copied := make([]string, len(values))
+		copy(copied, values)
+		dst[key] = copied
+	}
+}
+
 func (r *Response) ToHttpResponseWriterWihtStream(w http.ResponseWriter, isStream bool, hooks ...ResponseHook) (int64, error) {
 	r.isStream = isStream
 
@@ -203,49 +214,56 @@ func (r *Response) ToHttpResponseWriterWihtStream(w http.ResponseWriter, isStrea
 }
 
 func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...ResponseHook) (int64, error) {
-	var totalBytes int64
-
-	w.WriteHeader(r.statusCode)
-	for k, v := range r.RawResponse.Header {
-		w.Header()[k] = v
+	if r.RawResponse == nil {
+		return 0, fmt.Errorf("raw response is nil")
 	}
 
-	if r.StatusCode() >= http.StatusBadRequest {
+	body := r.RawResponse.Body
+	if body != nil {
+		defer body.Close()
+	}
+
+	statusCode := r.StatusCode()
+	contentType := r.RawResponse.Header.Get("Content-Type")
+
+	writeHeaders := func() {
+		copyResponseHeaders(w.Header(), r.RawResponse.Header)
+		w.WriteHeader(statusCode)
+	}
+
+	if statusCode >= http.StatusBadRequest {
+		writeHeaders()
 		return r.notStreamResponse(w, hooks...)
 	}
 
-	if strings.Contains(r.RawResponse.Header.Get("Content-Type"), "text/event-stream") || r.isStream {
-		reader := bufio.NewReader(r.RawResponse.Body)
+	if (strings.Contains(contentType, "text/event-stream") || r.isStream) && body != nil {
+		reader := bufio.NewReader(body)
 
-		// 尝试读取第一行来判断是否为真正的 SSE 格式
-		firstLine, err := reader.Peek(1024) // 预读取更多数据以判断格式
+		firstLine, err := reader.Peek(1024)
 		if err != nil && err != io.EOF {
-			return totalBytes, fmt.Errorf("error peeking response: %v", err)
+			return 0, fmt.Errorf("error peeking response: %w", err)
 		}
 
-		// 检查是否包含换行符，如果没有换行符可能是不规范的单一响应
 		if !bytes.Contains(firstLine, []byte("\n")) && err == io.EOF {
-			// 处理不规范的响应，修正 Content-Type 为 application/json
 			r.RawResponse.Header.Set("Content-Type", "application/json")
-			w.Header().Set("Content-Type", "application/json")
+			writeHeaders()
 
-			// 读取所有数据
 			allData, readErr := io.ReadAll(reader)
 			if readErr != nil {
-				return totalBytes, fmt.Errorf("error reading non-standard response: %v", readErr)
+				return 0, fmt.Errorf("error reading non-standard response: %w", readErr)
 			}
 
-			// 应用 hooks
+			totalBytes := int64(0)
 			flush := true
 			processedData := allData
 			for _, f := range hooks {
 				flush, processedData = f(processedData)
 			}
 
-			if flush {
+			if flush && len(processedData) > 0 {
 				n, writeErr := w.Write(processedData)
 				if writeErr != nil {
-					return totalBytes, fmt.Errorf("error writing response: %v", writeErr)
+					return totalBytes, fmt.Errorf("error writing response: %w", writeErr)
 				}
 				totalBytes += int64(n)
 			}
@@ -253,14 +271,15 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 			return totalBytes, nil
 		}
 
-		// 标准 SSE 流处理
+		writeHeaders()
+
+		totalBytes := int64(0)
 		for {
 			line, err := reader.ReadBytes('\n')
 			if err != nil {
 				if err != io.EOF {
-					return totalBytes, fmt.Errorf("error streaming response: %v", err)
+					return totalBytes, fmt.Errorf("error streaming response: %w", err)
 				}
-				// 如果遇到 EOF 但还有剩余数据，处理最后一行
 				if len(line) > 0 {
 					flush := true
 					processedLine := line
@@ -268,9 +287,9 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 						flush, processedLine = f(processedLine)
 					}
 					if flush {
-						n, err := w.Write(processedLine)
-						if err != nil {
-							return totalBytes, fmt.Errorf("error writing final line: %v", err)
+						n, writeErr := w.Write(processedLine)
+						if writeErr != nil {
+							return totalBytes, fmt.Errorf("error writing final line: %w", writeErr)
 						}
 						totalBytes += int64(n)
 					}
@@ -278,18 +297,15 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 				return totalBytes, nil
 			}
 
-			// 保存原始的换行符
 			originalLine := make([]byte, len(line))
 			copy(originalLine, line)
 
-			// 只去除右侧的换行符用于处理，保留其他空白字符
 			trimmedLine := bytes.TrimRight(line, "\n")
 
 			if len(trimmedLine) == 0 {
-				// 如果是空行，直接写入原始内容
-				n, err := w.Write(originalLine)
-				if err != nil {
-					return totalBytes, fmt.Errorf("error writing response: %v", err)
+				n, writeErr := w.Write(originalLine)
+				if writeErr != nil {
+					return totalBytes, fmt.Errorf("error writing response: %w", writeErr)
 				}
 				totalBytes += int64(n)
 			} else {
@@ -302,31 +318,25 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 					continue
 				}
 
-				// 恢复原始的换行符
 				if bytes.HasSuffix(originalLine, []byte("\n")) {
 					processedLine = append(processedLine, '\n')
 				}
 
-				// 写入响应，保持原有换行符
-				n, err := w.Write(processedLine)
-				if err != nil {
-					return totalBytes, fmt.Errorf("error writing response: %v", err)
+				n, writeErr := w.Write(processedLine)
+				if writeErr != nil {
+					return totalBytes, fmt.Errorf("error writing response: %w", writeErr)
 				}
 				totalBytes += int64(n)
 			}
 
-			// 刷新响应
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()
 			}
 		}
 	}
 
-	totalBytes, err := r.notStreamResponse(w, hooks...)
-	if err != nil {
-		return 0, err
-	}
-	return totalBytes, nil
+	writeHeaders()
+	return r.notStreamResponse(w, hooks...)
 }
 
 func (r *Response) notStreamResponse(w http.ResponseWriter, hooks ...ResponseHook) (int64, error) {
@@ -337,10 +347,13 @@ func (r *Response) notStreamResponse(w http.ResponseWriter, hooks ...ResponseHoo
 		}
 		n, err := w.Write(r.body)
 		if err != nil {
-			return totalBytes, fmt.Errorf("error writing response: %v", err)
+			return totalBytes, fmt.Errorf("error writing response: %w", err)
 		}
 		totalBytes += int64(n)
 	} else {
+		if r.RawResponse.Body == nil {
+			return totalBytes, nil
+		}
 		if len(hooks) > 0 {
 			body, _ := io.ReadAll(r.RawResponse.Body)
 			for _, f := range hooks {
@@ -350,7 +363,7 @@ func (r *Response) notStreamResponse(w http.ResponseWriter, hooks ...ResponseHoo
 		}
 		n, err := io.Copy(w, r.RawResponse.Body)
 		if err != nil {
-			return totalBytes, fmt.Errorf("error copying response: %v", err)
+			return totalBytes, fmt.Errorf("error copying response: %w", err)
 		}
 		totalBytes += n
 	}

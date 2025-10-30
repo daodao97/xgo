@@ -1,6 +1,7 @@
 package xrequest
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,8 +12,27 @@ import (
 	"github.com/daodao97/xgo/xjson"
 )
 
-func TestRequest(t *testing.T) {
+type flushRecorder struct {
+	*httptest.ResponseRecorder
+	t *testing.T
+}
 
+func newFlushRecorder(t *testing.T) *flushRecorder {
+	return &flushRecorder{ResponseRecorder: httptest.NewRecorder(), t: t}
+}
+
+func (fr *flushRecorder) Flush() {}
+
+func (fr *flushRecorder) Write(b []byte) (int, error) {
+	if fr.t != nil {
+		fr.t.Logf("flushRecorder chunk: %s", bytes.TrimRight(b, "\n"))
+	} else {
+		fmt.Printf("flushRecorder chunk: %s\n", string(bytes.TrimRight(b, "\n")))
+	}
+	return fr.ResponseRecorder.Write(b)
+}
+
+func TestRequest(t *testing.T) {
 	b := `{
 		"name": "daodao"
 	}`
@@ -193,4 +213,92 @@ func TestRequestWithProxyWarp(t *testing.T) {
 	}
 	t.Log(resp.StatusCode())
 	t.Log(resp.Json())
+}
+
+func TestResponseToHttpResponseWriter(t *testing.T) {
+	const responseBody = `{"message":"ok"}`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Test-Header", "test-value")
+		fmt.Fprint(w, responseBody)
+	}))
+	defer server.Close()
+
+	resp, err := New().Get(server.URL)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	bodyLen, err := resp.ToHttpResponseWriter(recorder)
+	if err != nil {
+		t.Fatalf("write response failed: %v", err)
+	}
+
+	if bodyLen != int64(len(responseBody)) {
+		t.Fatalf("unexpected body length, expected %d got %d", len(responseBody), bodyLen)
+	}
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status code, expected 200 got %d", recorder.Code)
+	}
+
+	if got := recorder.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("unexpected content-type header, got %s", got)
+	}
+
+	if got := recorder.Header().Get("X-Test-Header"); got != "test-value" {
+		t.Fatalf("unexpected custom header, got %s", got)
+	}
+
+	if got := recorder.Body.String(); got != responseBody {
+		t.Fatalf("unexpected body, got %q", got)
+	}
+}
+
+func TestResponseToHttpResponseWriterStream(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatalf("server does not support flushing")
+		}
+
+		for i := 0; i < 3; i++ {
+			fmt.Fprintf(w, "data: message-%d\n\n", i)
+			flusher.Flush()
+		}
+	}))
+	defer server.Close()
+
+	resp, err := New().Get(server.URL)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+
+	recorder := newFlushRecorder(t)
+
+	bodyLen, err := resp.ToHttpResponseWriter(recorder)
+	if err != nil {
+		t.Fatalf("stream write failed: %v", err)
+	}
+
+	const expected = "data: message-0\n\ndata: message-1\n\ndata: message-2\n\n"
+	if bodyLen != int64(len(expected)) {
+		t.Fatalf("unexpected body length, expected %d got %d", len(expected), bodyLen)
+	}
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status code, expected 200 got %d", recorder.Code)
+	}
+
+	if got := recorder.Header().Get("Content-Type"); got != "text/event-stream" {
+		t.Fatalf("unexpected content-type header, got %s", got)
+	}
+
+	if body := recorder.Body.String(); body != expected {
+		t.Fatalf("unexpected body, got %q", body)
+	}
 }
