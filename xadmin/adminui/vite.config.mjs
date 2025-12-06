@@ -34,7 +34,7 @@ const plugins = [
 const baseEnv = {
   'VITE_BASE_API': '/api',
   'VITE_BASE': '',
-  'VITE_SERVER_API': 'http://127.0.0.1:3003'
+  'VITE_SERVER_API': 'http://127.0.0.1:4001'
 }
 
 export default ({ mode }) => {

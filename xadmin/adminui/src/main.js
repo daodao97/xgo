@@ -1,4 +1,5 @@
 import { createAdmin, setCmp, regViews } from '@okiss/oms'
+import './style.css'
 import '@okiss/oms/style.css'
 import { defineAsyncComponent } from 'vue'
 import app from './app'
