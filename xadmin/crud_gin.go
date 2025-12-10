@@ -303,9 +303,15 @@ func GinUpdate(c *gin.Context) {
 		}
 	}
 
-	opt := []xdb.Option{
-		xdb.WhereEq("id", id),
+	m := xdb.New(table)
+	if schema.NewModel != nil {
+		m = schema.NewModel(c.Request)
 	}
+
+	opt := []xdb.Option{
+		xdb.WhereEq(m.PrimaryKey(), id),
+	}
+
 	if schema.BeforeUpdate != nil {
 		_updateData, err := schema.BeforeUpdate(c.Request, updateData)
 		if err != nil {
@@ -316,11 +322,6 @@ func GinUpdate(c *gin.Context) {
 			return
 		}
 		updateData = _updateData
-	}
-
-	m := xdb.New(table)
-	if schema.NewModel != nil {
-		m = schema.NewModel(c.Request)
 	}
 
 	_, err := m.Ctx(c).Update(updateData, opt...)
@@ -355,16 +356,16 @@ func GinDelete(c *gin.Context) {
 		return
 	}
 
-	opt := []xdb.Option{
-		xdb.WhereEq("id", id),
-	}
-	if schema.BeforeDelete != nil {
-		opt = schema.BeforeDelete(c.Request, opt)
-	}
-
 	m := xdb.New(table)
 	if schema.NewModel != nil {
 		m = schema.NewModel(c.Request)
+	}
+
+	opt := []xdb.Option{
+		xdb.WhereEq(m.PrimaryKey(), id),
+	}
+	if schema.BeforeDelete != nil {
+		opt = schema.BeforeDelete(c.Request, opt)
 	}
 
 	_, err := m.Ctx(c).Update(xdb.Record{"is_deleted": 1}, opt...)
@@ -411,7 +412,7 @@ func GinOptions(c *gin.Context) {
 	// Building query options
 	var options []xdb.Option
 	if match, _ := regexp.MatchString(`^\d+$`, kw); match {
-		options = append(options, xdb.WhereEq("id", kw))
+		options = append(options, xdb.WhereEq(model.PrimaryKey(), kw))
 	} else if field != "" {
 		switch operator {
 		case "like":
