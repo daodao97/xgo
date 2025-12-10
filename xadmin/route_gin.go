@@ -35,7 +35,7 @@ func GinRoute(r *gin.Engine) *gin.RouterGroup {
 	api.GET("/:table_name/list", GinList)
 	api.GET("/:table_name/get/:id", GinGet)
 	api.POST("/:table_name/update/:id", GinUpdate)
-	api.DELETE("/:table_name/del", GinDelete)
+	api.DELETE("/:table_name/del/:id", GinDelete)
 	api.GET("/:table_name/options", GinOptions)
 
 	GinUserRoute(api)
