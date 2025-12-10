@@ -238,19 +238,19 @@ func GinGet(c *gin.Context) {
 		return
 	}
 
-	opt := []xdb.Option{
-		xdb.WhereEq("id", id),
-	}
-	if schema.BeforeGet != nil {
-		opt = schema.BeforeGet(c.Request, opt)
-	}
-
 	m := xdb.New(table)
 	if schema.NewModel != nil {
 		m = schema.NewModel(c.Request)
 	}
 
-	row, err := m.Ctx(c).Single(opt...)
+	opt := []xdb.Option{
+		xdb.WhereEq(m.PrimaryKey(), id),
+	}
+	if schema.BeforeGet != nil {
+		opt = schema.BeforeGet(c.Request, opt)
+	}
+
+	row, err := m.Ctx(c).First(opt...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
