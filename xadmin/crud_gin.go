@@ -368,7 +368,7 @@ func GinDelete(c *gin.Context) {
 		opt = schema.BeforeDelete(c.Request, opt)
 	}
 
-	_, err := m.Ctx(c).Update(xdb.Record{"is_deleted": 1}, opt...)
+	_, err := m.Ctx(c).Delete(opt...)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    500,
