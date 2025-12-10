@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cast"
@@ -346,6 +347,19 @@ func GinUpdate(c *gin.Context) {
 func GinDelete(c *gin.Context) {
 	table := c.Param("table_name")
 	id := c.Param("id")
+	ids := strings.Split(id, ",")
+	var idsAny []any
+	for _, id := range ids {
+		idsAny = append(idsAny, id)
+	}
+
+	if len(idsAny) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "delete id is required",
+		})
+		return
+	}
 
 	schema, ok := Cruds[table]
 	if !ok {
@@ -362,8 +376,9 @@ func GinDelete(c *gin.Context) {
 	}
 
 	opt := []xdb.Option{
-		xdb.WhereEq(m.PrimaryKey(), id),
+		xdb.WhereIn(m.PrimaryKey(), idsAny),
 	}
+
 	if schema.BeforeDelete != nil {
 		opt = schema.BeforeDelete(c.Request, opt)
 	}
@@ -378,7 +393,9 @@ func GinDelete(c *gin.Context) {
 	}
 
 	if schema.AfterDelete != nil {
-		schema.AfterDelete(c.Request, cast.ToInt64(id))
+		for _, id := range idsAny {
+			schema.AfterDelete(c.Request, cast.ToInt64(id))
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
