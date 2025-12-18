@@ -247,6 +247,25 @@ func SetSuccessCode(code int) {
 	SuccessCode = code
 }
 
+// AppError 定义支持错误码的错误类型
+type AppError struct {
+	Code    int    // 错误码
+	Message string // 错误消息
+}
+
+// Error 实现 error 接口
+func (e *AppError) Error() string {
+	return e.Message
+}
+
+// NewAppError 创建一个新的 AppError
+func NewAppError(code int, message string) *AppError {
+	return &AppError{
+		Code:    code,
+		Message: message,
+	}
+}
+
 var MaxMultipartFormSize int64 = 32 << 20 // 32MB
 
 func SetMaxMultipartFormSize(size int64) {
@@ -318,6 +337,16 @@ func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error
 
 		resp, err := handler(c, req)
 		if err != nil {
+			// 判断错误是否是 AppError 类型
+			var appErr *AppError
+			if errors.As(err, &appErr) {
+				c.JSON(500, gin.H{
+					"code":    appErr.Code,
+					"message": appErr.Message,
+				})
+				return
+			}
+			// 如果不是 AppError 类型，使用默认错误码 500
 			c.JSON(500, gin.H{
 				"code":    500,
 				"message": err.Error(),
