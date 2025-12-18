@@ -326,6 +326,8 @@ func (r *Request) do() (*Response, error) {
 		// xlog.Any("curl", _curlString),
 	}
 
+	_ = _curlString
+
 	if err != nil {
 		logFunc = xlog.WarnCtx
 		args = append(args, xlog.Any("error", err))
