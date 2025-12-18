@@ -323,7 +323,7 @@ func (r *Request) do() (*Response, error) {
 		xlog.String("url", r.targetUrl),
 		xlog.String("method", r.method),
 		xlog.Duration("duration", duration),
-		xlog.Any("curl", _curlString),
+		// xlog.Any("curl", _curlString),
 	}
 
 	if err != nil {
