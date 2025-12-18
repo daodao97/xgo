@@ -29,6 +29,12 @@ func CommaInt(field string) Hook {
 	}
 }
 
+func CommaString(field string) Hook {
+	return func() (string, HookData) {
+		return field, &hook.CommaSeparatedString{}
+	}
+}
+
 func Time(field string, format string) Hook {
 	return func() (string, HookData) {
 		return field, &hook.Time{Format: format}

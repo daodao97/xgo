@@ -1,7 +1,6 @@
 package hook
 
 import (
-	"sort"
 	"strings"
 
 	"github.com/spf13/cast"
@@ -17,9 +16,6 @@ func (CommaSeparatedInt) Input(row map[string]any, fieldValue any) (any, error) 
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(strSlice, func(i, j int) bool {
-		return strSlice[i] < strSlice[j]
-	})
 	return strings.Join(strSlice, ","), nil
 }
 
