@@ -180,9 +180,9 @@ func NewGin(opts ...AppOption) *gin.Engine {
 		if !isMultipart && len(bodyBytes) > 0 {
 			const maxBodyLength = 1024 * 10 // 10KB
 			bodyStr := string(bodyBytes)
-			if len(bodyStr) > maxBodyLength {
-				bodyStr = bodyStr[:maxBodyLength] + "..."
-			}
+			// if len(bodyStr) > maxBodyLength {
+			// 	bodyStr = bodyStr[:maxBodyLength] + "..."
+			// }
 			args = append(args, slog.String("body", bodyStr))
 		}
 
