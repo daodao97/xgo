@@ -19,6 +19,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/daodao97/xgo/utils"
+	"github.com/daodao97/xgo/xcode"
 	"github.com/daodao97/xgo/xlog"
 	"github.com/daodao97/xgo/xtrace"
 	"github.com/daodao97/xgo/xutil"
@@ -318,6 +319,20 @@ func HanderFunc[Req any, Resp any](handler func(*gin.Context, Req) (*Resp, error
 
 		resp, err := handler(c, req)
 		if err != nil {
+			// 判断错误是否是 xcode.Code 类型
+			var codeErr *xcode.Code
+			if errors.As(err, &codeErr) {
+				httpCode := codeErr.HttpCode
+				if httpCode == 0 {
+					httpCode = 500 // 如果未设置 HttpCode，默认使用 500
+				}
+				c.JSON(httpCode, gin.H{
+					"code":    codeErr.Code,
+					"message": codeErr.Message,
+				})
+				return
+			}
+			// 如果不是 xcode.Code 类型，使用默认错误码 500
 			c.JSON(500, gin.H{
 				"code":    500,
 				"message": err.Error(),
