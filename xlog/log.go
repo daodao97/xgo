@@ -15,7 +15,9 @@ func init() {
 }
 
 var opts = slog.HandlerOptions{
-	Level: slog.LevelDebug,
+	Level:       slog.LevelDebug,
+	AddSource:   true,
+	ReplaceAttr: replaceSourceAttr,
 }
 
 var logger = StdoutTextPretty()

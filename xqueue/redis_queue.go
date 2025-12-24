@@ -16,7 +16,7 @@ func init() {
 	queueLock = sync.Mutex{}
 }
 
-func AddQueue(redis *redis.Client, topic string, handler func(data string), workers int) Queue {
+func AddQueue(redis redis.UniversalClient, topic string, handler func(data string), workers int) Queue {
 	queueLock.Lock()
 	defer queueLock.Unlock()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -43,7 +43,7 @@ func GetQueue(topic string) Queue {
 }
 
 type RedisQueue struct {
-	redis   *redis.Client
+	redis   redis.UniversalClient
 	queue   *redis.PubSub
 	topic   string
 	handler func(data string)
