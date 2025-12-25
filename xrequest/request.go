@@ -237,6 +237,7 @@ func (r *Request) Do() (resp *Response, err error) {
 		return r.do()
 	}
 
+	var lastResp *Response
 	var lastErr error
 	for attempt := uint(1); attempt <= r.retryAttempts; attempt++ {
 		resp, err = r.do()
@@ -245,21 +246,14 @@ func (r *Request) Do() (resp *Response, err error) {
 			return resp, err
 		}
 
+		lastResp = resp
 		lastErr = err
 		if attempt < r.retryAttempts {
 			time.Sleep(r.retryDelay)
 		}
 	}
 
-	if lastErr != nil {
-		return resp, lastErr
-	}
-
-	if resp != nil && resp.StatusCode() >= http.StatusInternalServerError {
-		return resp, fmt.Errorf("request failed after %d attempts, status: %d", r.retryAttempts, resp.StatusCode())
-	}
-
-	return resp, fmt.Errorf("request failed after %d attempts", r.retryAttempts)
+	return lastResp, lastErr
 }
 
 func (r *Request) shouldRetry(resp *Response, err error) bool {
