@@ -317,7 +317,7 @@ func (r *Request) do() (*Response, error) {
 		xlog.String("url", r.targetUrl),
 		xlog.String("method", r.method),
 		xlog.Duration("duration", duration),
-		// xlog.Any("curl", _curlString),
+		xlog.Any("curl", _curlString),
 	}
 
 	_ = _curlString
@@ -326,6 +326,13 @@ func (r *Request) do() (*Response, error) {
 		logFunc = xlog.WarnCtx
 		args = append(args, xlog.Any("error", err))
 		logFunc(ctx, "xrequest network error", args...)
+		if r.debug && len(debugInfo) > 0 {
+			debugInfo = append([]string{"-------request curl command start-------"}, debugInfo...)
+
+			debugInfo = append(debugInfo, "-------request curl command end-------")
+			fmt.Println(strings.Join(debugInfo, "\n"))
+		}
+
 		return nil, NewRequestError("请求失败", err)
 	}
 
