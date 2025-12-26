@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/daodao97/xgo/utils"
 	"github.com/daodao97/xgo/xlog"
 )
 
@@ -63,7 +62,7 @@ type File struct {
 }
 
 func New() *Request {
-	return &Request{debug: utils.IsGoRun()}
+	return &Request{}
 }
 
 func (r *Request) SetMethod(method string) *Request {
@@ -275,9 +274,7 @@ func (r *Request) do() (*Response, error) {
 		ctx = context.Background()
 	}
 
-	if RequestDebug {
-		r.debug = true
-	}
+	r.debug = RequestDebug
 
 	req, err := r.makeRequest(ctx)
 	if err != nil {
