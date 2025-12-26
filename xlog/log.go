@@ -85,8 +85,8 @@ func withTriceId(ctx context.Context, args ...any) []any {
 	if requestId := ctx.Value("request_id"); requestId != nil {
 		args = append(args, String("request_id", requestId.(string)))
 	}
-	if triceId := xtrace.FromTraceId(ctx); triceId != "" {
-		args = append(args, String("trice_id", triceId))
+	if traceId := xtrace.FromTraceId(ctx); traceId != "" {
+		args = append(args, String("traceid", traceId))
 	}
 	return args
 }
