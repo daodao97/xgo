@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/andybalholm/brotli"
@@ -207,6 +208,116 @@ func copyResponseHeaders(dst, src http.Header) {
 	}
 }
 
+func applyResponseHooks(hooks []ResponseHook, data []byte) (bool, []byte) {
+	flush := true
+	processed := data
+	for _, f := range hooks {
+		flush, processed = f(processed)
+	}
+	return flush, processed
+}
+
+func splitLineSuffix(line []byte) ([]byte, []byte) {
+	if bytes.HasSuffix(line, []byte("\r\n")) {
+		return line[:len(line)-2], []byte("\r\n")
+	}
+	if bytes.HasSuffix(line, []byte("\n")) {
+		return line[:len(line)-1], []byte("\n")
+	}
+	return line, nil
+}
+
+func flushResponseWriter(w http.ResponseWriter) {
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func writeSSEStreamV2(w http.ResponseWriter, reader io.Reader, hooks []ResponseHook) (int64, error) {
+	bufReader := bufio.NewReader(reader)
+	totalBytes := int64(0)
+
+	for {
+		line, err := bufReader.ReadBytes('\n')
+		if err != nil && err != io.EOF {
+			return totalBytes, fmt.Errorf("error streaming response: %w", err)
+		}
+
+		if len(line) == 0 {
+			return totalBytes, nil
+		}
+
+		content, newline := splitLineSuffix(line)
+		if len(content) == 0 {
+			n, writeErr := w.Write(line)
+			if writeErr != nil {
+				return totalBytes, fmt.Errorf("error writing response: %w", writeErr)
+			}
+			totalBytes += int64(n)
+			flushResponseWriter(w)
+			if err == io.EOF {
+				return totalBytes, nil
+			}
+			continue
+		}
+		flush, processed := applyResponseHooks(hooks, content)
+		if flush {
+			if len(newline) > 0 {
+				processed = append(processed, newline...)
+			}
+			if len(processed) > 0 {
+				n, writeErr := w.Write(processed)
+				if writeErr != nil {
+					return totalBytes, fmt.Errorf("error writing response: %w", writeErr)
+				}
+				totalBytes += int64(n)
+			}
+			flushResponseWriter(w)
+		}
+
+		if err == io.EOF {
+			return totalBytes, nil
+		}
+	}
+}
+
+func writeChunkStreamV2(w http.ResponseWriter, reader io.Reader, hooks []ResponseHook) (int64, error) {
+	buf := make([]byte, 32*1024)
+	totalBytes := int64(0)
+
+	for {
+		n, err := reader.Read(buf)
+		if n > 0 {
+			chunk := buf[:n]
+			if len(hooks) > 0 {
+				chunk = append([]byte(nil), chunk...)
+				flush, processed := applyResponseHooks(hooks, chunk)
+				if !flush || len(processed) == 0 {
+					if err == io.EOF {
+						return totalBytes, nil
+					}
+					continue
+				}
+				chunk = processed
+			}
+
+			written, writeErr := w.Write(chunk)
+			if writeErr != nil {
+				return totalBytes, fmt.Errorf("error writing response: %w", writeErr)
+			}
+			totalBytes += int64(written)
+			flushResponseWriter(w)
+		}
+
+		if err != nil {
+			if err == io.EOF {
+				return totalBytes, nil
+			}
+			return totalBytes, fmt.Errorf("error streaming response: %w", err)
+		}
+	}
+}
+
 func (r *Response) ToHttpResponseWriterWihtStream(w http.ResponseWriter, isStream bool, hooks ...ResponseHook) (int64, error) {
 	r.isStream = isStream
 
@@ -337,6 +448,79 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 
 	writeHeaders()
 	return r.notStreamResponse(w, hooks...)
+}
+
+func (r *Response) ToHttpResponseWriteV2(w http.ResponseWriter, hooks ...ResponseHook) (int64, error) {
+	if r.RawResponse == nil {
+		return 0, fmt.Errorf("raw response is nil")
+	}
+
+	body := r.RawResponse.Body
+	if body != nil {
+		defer body.Close()
+	}
+
+	statusCode := r.StatusCode()
+	contentType := r.RawResponse.Header.Get("Content-Type")
+	isSSE := strings.Contains(contentType, "text/event-stream")
+	isStream := (isSSE || r.isStream) && body != nil && !r.parsed
+
+	if statusCode >= http.StatusBadRequest || !isStream {
+		return r.writeNonStreamResponseV2(w, hooks...)
+	}
+
+	copyResponseHeaders(w.Header(), r.RawResponse.Header)
+	w.Header().Del("Content-Length")
+	w.WriteHeader(statusCode)
+
+	if isSSE {
+		return writeSSEStreamV2(w, body, hooks)
+	}
+	return writeChunkStreamV2(w, body, hooks)
+}
+
+func (r *Response) writeNonStreamResponseV2(w http.ResponseWriter, hooks ...ResponseHook) (int64, error) {
+	statusCode := r.StatusCode()
+	bodyKnown := false
+	var body []byte
+
+	if r.parsed {
+		body = r.body
+		bodyKnown = true
+	} else if r.RawResponse.Body != nil {
+		var readErr error
+		body, readErr = io.ReadAll(r.RawResponse.Body)
+		if readErr != nil {
+			return 0, fmt.Errorf("error reading response: %w", readErr)
+		}
+		bodyKnown = true
+	}
+
+	if bodyKnown && len(hooks) > 0 {
+		flush, processed := applyResponseHooks(hooks, body)
+		if flush {
+			body = processed
+		} else {
+			body = nil
+		}
+	}
+
+	copyResponseHeaders(w.Header(), r.RawResponse.Header)
+	if bodyKnown {
+		w.Header().Del("Transfer-Encoding")
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	}
+	w.WriteHeader(statusCode)
+
+	if len(body) == 0 {
+		return 0, nil
+	}
+
+	n, err := w.Write(body)
+	if err != nil {
+		return int64(n), fmt.Errorf("error writing response: %w", err)
+	}
+	return int64(n), nil
 }
 
 func (r *Response) notStreamResponse(w http.ResponseWriter, hooks ...ResponseHook) (int64, error) {
