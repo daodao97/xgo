@@ -1,8 +1,10 @@
 package xadmin
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/daodao97/xgo/xdb"
 	"github.com/daodao97/xgo/xjwt"
+	"github.com/daodao97/xgo/xredis"
 	"github.com/gin-gonic/gin"
 )
 
@@ -37,6 +40,9 @@ func GinRoute(r *gin.Engine) *gin.RouterGroup {
 	api.POST("/:table_name/update/:id", GinUpdate)
 	api.DELETE("/:table_name/del/:id", GinDelete)
 	api.GET("/:table_name/options", GinOptions)
+
+	api.POST("/redis_cache/:cache_key", GinSaveRedisCache)
+	api.GET("/redis_cache/:cache_key", GinGetRedisCache)
 
 	GinUserRoute(api)
 
@@ -161,4 +167,80 @@ func GetUserFormCtx(c *gin.Context) *UserInfo {
 	var u UserInfo
 	json.Unmarshal(userJosn, &u)
 	return &u
+}
+
+func GinSaveRedisCache(c *gin.Context) {
+	cacheKey := c.Param("cache_key")
+	if cacheKey == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "cache_key is required"})
+		return
+	}
+
+	var data any
+	if err := c.ShouldBindJSON(&data); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": err.Error()})
+		return
+	}
+
+	redisClient := xredis.Get()
+	if redisClient == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "redis client not initialized"})
+		return
+	}
+
+	err = redisClient.Set(c.Request.Context(), cacheKey, string(jsonData), 0).Err()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+}
+
+func GinGetRedisCache(c *gin.Context) {
+	cacheKey := c.Param("cache_key")
+	if cacheKey == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "cache_key is required"})
+		return
+	}
+
+	redisClient := xredis.Get()
+	if redisClient == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "redis client not initialized"})
+		return
+	}
+
+	val, err := redisClient.Get(c.Request.Context(), cacheKey).Result()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{}})
+		return
+	}
+
+	var data map[string]any
+	if err := json.Unmarshal([]byte(val), &data); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "data": val})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "data": data})
+}
+
+func GetRedisCache(c context.Context, cacheKey string) (string, error) {
+	redisClient := xredis.Get()
+	if redisClient == nil {
+		return "", errors.New("redis clent not found")
+	}
+
+	val, err := redisClient.Get(c, cacheKey).Result()
+	if err != nil {
+		return "", err
+	}
+
+	return val, nil
 }

@@ -425,6 +425,9 @@ func WhereBetween(field string, value1 any, value2 any) Option {
 	}
 }
 
+// WhereFindInSet adds a FIND_IN_SET condition to the query.
+// Note: This function is MySQL-specific and will not work with PostgreSQL or SQLite.
+// For cross-database compatibility, consider using alternative approaches like JSON columns or separate junction tables.
 func WhereFindInSet(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{
@@ -435,6 +438,9 @@ func WhereFindInSet(field string, value any) Option {
 	}
 }
 
+// WhereOrFindInSet adds an OR FIND_IN_SET condition to the query.
+// Note: This function is MySQL-specific and will not work with PostgreSQL or SQLite.
+// For cross-database compatibility, consider using alternative approaches like JSON columns or separate junction tables.
 func WhereOrFindInSet(field string, value any) Option {
 	return func(opts *Options) {
 		opts.where = append(opts.where, where{

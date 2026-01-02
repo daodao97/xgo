@@ -64,6 +64,7 @@ type model struct {
 	client          *sql.DB
 	readClient      *sql.DB
 	config          *Config
+	dialect         Dialect
 	saveZero        bool
 	enableValidator bool
 	err             error
@@ -96,11 +97,20 @@ func New(table string, baseOpt ...With) Model {
 		}
 		m.client = p.db
 		m.config = p.conf
+		m.dialect = p.dialect
 	}
 	if m.readClient == nil {
 		p, err := db(readConn(m.connection))
 		if err == nil {
 			m.readClient = p.db
+		}
+	}
+	// 确保 dialect 已设置
+	if m.dialect == nil {
+		if m.config != nil {
+			m.dialect = GetDialect(m.config.Driver)
+		} else {
+			m.dialect = GetDialect("")
 		}
 	}
 	m.enableValidator = true
@@ -181,10 +191,15 @@ func (m *model) Select(opt ...Option) (rows *Rows) {
 
 	_sql, args := SelectBuilder(opt...)
 
+	// 使用方言转换占位符
+	_sql = m.dialect.ConvertPlaceholders(_sql)
+
 	client := m.client
 	if m.readClient != nil {
 		client = m.readClient
 	}
+
+	kv = append(kv, "sql", _sql, "args", args)
 
 	var res []Row
 	if m.tx != nil {
@@ -192,7 +207,6 @@ func (m *model) Select(opt ...Option) (rows *Rows) {
 	} else {
 		res, err = query(client, _sql, args...)
 	}
-	kv = append(kv, "sql", _sql, "args", args)
 	if err != nil {
 		return &Rows{Err: err}
 	}
@@ -391,33 +405,32 @@ func (m *model) Insert(record Record) (lastId int64, err error) {
 	ks, vs := m.recordToKV(_record)
 	_sql, args := InsertBuilder(table(m.getTableName()), Field(ks...), Value(vs...))
 
-	if m.config.Driver == "postgres" {
-		_sql = _sql + " RETURNING " + m.primaryKey
-		_sql = convertPlaceholders(_sql)
-	}
+	// 使用方言转换占位符
+	_sql = m.dialect.ConvertPlaceholders(_sql)
 
 	kv = append(kv, "sql", _sql, "args", vs)
 
-	if m.config.Driver == "postgres" {
-		err = m.client.QueryRow(_sql, args...).Scan(&lastId)
-	} else {
-		var res sql.Result
+	// PostgreSQL 不支持 LastInsertId，使用 RETURNING
+	if !m.dialect.SupportsLastInsertId() {
+		_sql = m.dialect.InsertReturning(_sql, m.primaryKey)
 		if m.tx != nil {
-			res, err = execTx(m.tx, _sql, args...)
+			err = m.tx.QueryRow(_sql, args...).Scan(&lastId)
 		} else {
-			res, err = exec(m.client, _sql, args...)
+			err = m.client.QueryRow(_sql, args...).Scan(&lastId)
 		}
-		if err != nil {
-			return 0, err
-		}
-		return res.LastInsertId()
+		return lastId, err
 	}
 
+	var res sql.Result
+	if m.tx != nil {
+		res, err = execTx(m.tx, _sql, args...)
+	} else {
+		res, err = exec(m.client, _sql, args...)
+	}
 	if err != nil {
 		return 0, err
 	}
-
-	return lastId, nil
+	return res.LastInsertId()
 }
 
 func (m *model) Inserts(records []Record) (lastId int64, err error) {
@@ -492,7 +505,21 @@ func (m *model) InsertBatch(records []Record) (lastId int64, err error) {
 		strings.Join(fields, ","),
 		strings.Join(placeholders, ","))
 
+	// 使用方言转换占位符
+	query = m.dialect.ConvertPlaceholders(query)
+
 	kv = append(kv, "sql", query, "args", values)
+
+	// PostgreSQL 不支持 LastInsertId，使用 RETURNING 获取第一个插入的 ID
+	if !m.dialect.SupportsLastInsertId() {
+		query = m.dialect.InsertReturning(query, m.primaryKey)
+		if m.tx != nil {
+			err = m.tx.QueryRow(query, values...).Scan(&lastId)
+		} else {
+			err = m.client.QueryRow(query, values...).Scan(&lastId)
+		}
+		return lastId, err
+	}
 
 	var result sql.Result
 	if m.tx != nil {
@@ -548,11 +575,11 @@ func (m *model) Update(record Record, opt ...Option) (ok bool, err error) {
 	opt = append(opt, table(m.getTableName()), Field(ks...), Value(vs...))
 
 	_sql, args := UpdateBuilder(opt...)
-	kv = append(kv, "sql", _sql, "args", args)
 
-	if m.config.Driver == "postgres" {
-		_sql = convertPlaceholders(_sql)
-	}
+	// 使用方言转换占位符
+	_sql = m.dialect.ConvertPlaceholders(_sql)
+
+	kv = append(kv, "sql", _sql, "args", args)
 
 	var result sql.Result
 	if m.tx != nil {
@@ -599,37 +626,40 @@ func (m *model) InsertOrUpdate(record Record, updateFields ...string) (affected 
 		values = append(values, value)
 	}
 
-	// 准备更新的字段
-	var updates []string
+	// 准备更新的字段（只需要字段名，不需要占位符格式）
+	var updateFieldNames []string
+	var updateValues []any
 	if len(updateFields) == 0 {
 		// 如果没有指定更新字段，更新除主键外的所有字段
 		for i, field := range fields {
 			if field != m.primaryKey {
-				// updates = append(updates, fmt.Sprintf("%s=VALUES(%s)", field, field))
-				updates = append(updates, parseSet(field, values[i]))
-				values = append(values, values[i])
+				updateFieldNames = append(updateFieldNames, field)
+				updateValues = append(updateValues, values[i])
 			}
 		}
 	} else {
 		// 只更新指定的字段
-		for i, field := range updateFields {
-			if _, exists := record[field]; exists {
-				updates = append(updates, parseSet(field, values[i]))
-				values = append(values, values[i])
+		for _, field := range updateFields {
+			if value, exists := record[field]; exists {
+				updateFieldNames = append(updateFieldNames, field)
+				updateValues = append(updateValues, value)
 			}
 		}
 	}
 
-	// 构建 SQL 语句
-	query := fmt.Sprintf(
-		"INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
-		m.table,
-		strings.Join(fields, ", "),
-		strings.Repeat("?, ", len(fields)-1)+"?",
-		strings.Join(updates, ", "),
-	)
+	// 使用方言构建 UPSERT SQL
+	placeholders := m.dialect.Placeholders(len(fields))
+	query, needExtraValues := m.dialect.Upsert(m.table, fields, placeholders, m.primaryKey, updateFieldNames)
+
+	// 根据方言决定是否需要额外的更新值
+	if needExtraValues {
+		values = append(values, updateValues...)
+	}
 
 	values = parseSetValues(values)
+
+	// 使用方言转换占位符
+	query = m.dialect.ConvertPlaceholders(query)
 
 	kv = append(kv, "sql", query, "args", values)
 
@@ -695,15 +725,14 @@ func (m *model) InsertIgnore(record Record) (lastId int64, err error) {
 		values = append(values, value)
 	}
 
-	// 构建 SQL 语句
-	query := fmt.Sprintf(
-		"INSERT IGNORE INTO %s (%s) VALUES (%s)",
-		m.table,
-		strings.Join(fields, ", "),
-		strings.Repeat("?, ", len(fields)-1)+"?",
-	)
+	// 使用方言构建 INSERT IGNORE SQL
+	placeholders := m.dialect.Placeholders(len(fields))
+	query := m.dialect.InsertIgnore(m.table, fields, placeholders)
 
 	values = parseSetValues(values)
+
+	// 使用方言转换占位符
+	query = m.dialect.ConvertPlaceholders(query)
 
 	kv = append(kv, "sql", query, "args", values)
 
@@ -748,11 +777,11 @@ func (m *model) Delete(opt ...Option) (ok bool, err error) {
 	defer dbLog(m.ctx, "Delete", time.Now(), &err, &kv)
 
 	_sql, args := DeleteBuilder(opt...)
-	kv = append(kv, "sql", _sql, "args", args)
 
-	if m.config.Driver == "postgres" {
-		_sql = convertPlaceholders(_sql)
-	}
+	// 使用方言转换占位符
+	_sql = m.dialect.ConvertPlaceholders(_sql)
+
+	kv = append(kv, "sql", _sql, "args", args)
 
 	var result sql.Result
 	if m.tx != nil {

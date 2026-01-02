@@ -23,8 +23,9 @@ type Config struct {
 var pool = sync.Map{}
 
 type DbPool struct {
-	db   *sql.DB
-	conf *Config
+	db      *sql.DB
+	conf    *Config
+	dialect Dialect
 }
 
 func Inits(conns []Config) error {
@@ -125,7 +126,8 @@ func NewDb(conf *Config) (*DbPool, error) {
 		db.SetConnMaxLifetime(conf.ConnMaxLifetime)
 	}
 	return &DbPool{
-		db:   db,
-		conf: conf,
+		db:      db,
+		conf:    conf,
+		dialect: GetDialect(driver),
 	}, nil
 }
