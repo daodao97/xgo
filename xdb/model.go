@@ -158,6 +158,7 @@ func (m *model) Tx(tx *sql.Tx) Model {
 		ctx:             m.ctx,
 		tx:              tx, // 设置新的事务
 		clearCache:      m.clearCache,
+		dialect:         m.dialect,
 	}
 	return newModel
 }
