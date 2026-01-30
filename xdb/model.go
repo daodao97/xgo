@@ -840,7 +840,8 @@ func (m *model) DelCache(opt ...Option) {
 	}
 }
 
-func (m *model) Exec(query string, args ...any) (sql.Result, error) {
+func (m *model) Exec(query string, args ...any) (res sql.Result, err error) {
+	defer dbLog(m.ctx, "Exec", time.Now(), &err, &args)
 	if m.tx != nil {
 		return execTx(m.tx, query, args...)
 	}
