@@ -571,7 +571,7 @@ func (m *model) Update(record Record, opt ...Option) (ok bool, err error) {
 
 	m.DelCache(opt...)
 
-	return effect >= int64(0), nil
+	return effect > int64(0), nil
 }
 
 func (m *model) InsertOrUpdate(record Record, updateFields ...string) (affected int64, err error) {
