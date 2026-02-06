@@ -5,10 +5,18 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 )
 
 var envNoProxyUpper = os.Getenv("NO_PROXY")
 var envNoProxyLower = os.Getenv("no_proxy")
+
+var (
+	defaultClient     *http.Client
+	defaultClientOnce sync.Once
+	proxyClients      = make(map[string]*http.Client)
+	proxyClientsMu    sync.RWMutex
+)
 
 // http proxy , support http, https, socks5
 func GetProxyClient(proxy string) *http.Client {
@@ -16,14 +24,32 @@ func GetProxyClient(proxy string) *http.Client {
 	if err != nil {
 		return nil
 	}
-	return &http.Client{
+	proxyClientsMu.RLock()
+	client, ok := proxyClients[proxy]
+	proxyClientsMu.RUnlock()
+	if ok {
+		return client
+	}
+	proxyClientsMu.Lock()
+	defer proxyClientsMu.Unlock()
+	if client, ok = proxyClients[proxy]; ok {
+		return client
+	}
+	client = &http.Client{
 		Transport: &http.Transport{Proxy: proxyWithNoProxy(proxyUrl)},
 	}
+	proxyClients[proxy] = client
+	return client
 }
 
 func GetDefaultProxyClient() *http.Client {
-	// 使用标准库从环境变量获取代理，自动支持 NO_PROXY/no_proxy
-	return &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment}}
+	// 使用单例 client，避免每次请求创建新 Transport 导致 "too many open files"
+	defaultClientOnce.Do(func() {
+		defaultClient = &http.Client{
+			Transport: &http.Transport{Proxy: http.ProxyFromEnvironment},
+		}
+	})
+	return defaultClient
 }
 
 // 构造一个支持 NO_PROXY/no_proxy 的 Proxy 函数
