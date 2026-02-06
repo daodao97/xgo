@@ -18,6 +18,19 @@ import (
 	"github.com/daodao97/xgo/xjson"
 )
 
+// readCloser 包装 Reader，Close 时调用 close 以正确归还 HTTP 连接
+type readCloser struct {
+	io.Reader
+	close func() error
+}
+
+func (r *readCloser) Close() error {
+	if r.close != nil {
+		return r.close()
+	}
+	return nil
+}
+
 func NewResponse(rawResponse *http.Response) *Response {
 	return &Response{RawResponse: rawResponse, statusCode: rawResponse.StatusCode}
 }
@@ -51,14 +64,15 @@ func (r *Response) BodyIsEmpty() bool {
 			return true
 		}
 
-		// 使用 peek 检查是否有数据，不消耗原始 body
-		peekReader := bufio.NewReader(r.RawResponse.Body)
+		origBody := r.RawResponse.Body
+		peekReader := bufio.NewReader(origBody)
 		_, err := peekReader.Peek(1)
 		if err == io.EOF {
+			origBody.Close()
 			return true
 		}
-		// 将 peekReader 重新包装回 RawResponse.Body
-		r.RawResponse.Body = io.NopCloser(peekReader)
+		// 包装 peekReader，Close 时关闭原始 body 以归还连接
+		r.RawResponse.Body = &readCloser{Reader: peekReader, close: origBody.Close}
 		return false
 	}
 
@@ -156,6 +170,14 @@ func (r *Response) Headers() http.Header {
 	return r.RawResponse.Header
 }
 
+// Close 关闭响应 body，归还连接。若只检查 StatusCode 等而不消费 body，应调用 defer resp.Close()
+func (r *Response) Close() error {
+	if r.RawResponse != nil && r.RawResponse.Body != nil {
+		return r.RawResponse.Body.Close()
+	}
+	return nil
+}
+
 func (r *Response) Stream() (chan string, error) {
 	if !strings.Contains(r.RawResponse.Header.Get("Content-Type"), "text/event-stream") {
 		return nil, &xcode.Code{
@@ -168,6 +190,7 @@ func (r *Response) Stream() (chan string, error) {
 
 	go func() {
 		defer close(messages)
+		defer r.RawResponse.Body.Close()
 		reader := bufio.NewReader(r.RawResponse.Body)
 
 		for {
@@ -180,14 +203,6 @@ func (r *Response) Stream() (chan string, error) {
 			}
 
 			messages <- line
-
-			// line = strings.TrimSpace(line)
-			// if strings.HasPrefix(line, "data: ") {
-			// 	data := strings.TrimPrefix(line, "data: ")
-			// 	messages <- data
-			// } else {
-			// 	messages <- line
-			// }
 		}
 	}()
 
@@ -356,6 +371,7 @@ func (r *Response) notStreamResponse(w http.ResponseWriter, hooks ...ResponseHoo
 		}
 		if len(hooks) > 0 {
 			body, _ := io.ReadAll(r.RawResponse.Body)
+			r.RawResponse.Body.Close()
 			for _, f := range hooks {
 				_, body = f(body)
 			}

@@ -303,11 +303,13 @@ func (r *Request) do() (*Response, error) {
 
 	client := r.client
 	if client == nil {
-		client = GetDefaultProxyClient()
-	}
-	if r.proxy != "" {
-		if u, err := url.Parse(r.proxy); err == nil {
-			client.Transport = &http.Transport{Proxy: proxyWithNoProxy(u)}
+		if r.proxy != "" {
+			client = GetProxyClient(r.proxy)
+			if client == nil {
+				client = GetDefaultProxyClient()
+			}
+		} else {
+			client = GetDefaultProxyClient()
 		}
 	}
 	if r.timeout > 0 {
