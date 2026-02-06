@@ -22,9 +22,10 @@ XGO is a comprehensive Go framework providing modular components for web develop
 - `go vet ./...` - Run static analysis
 
 ### Admin UI (for xadmin development)
-- `cd xadmin/adminui && npm install` - Install frontend dependencies
-- `cd xadmin/adminui && npm run dev` - Start development server
-- `cd xadmin/adminui && npm run build` - Build for production
+- `cd xadmin/adminui && pnpm install` - Install frontend dependencies
+- `cd xadmin/adminui && pnpm dev` - Start development server
+- `cd xadmin/adminui && pnpm build` - Build for production
+- `cd xadmin && ./admin_ui.sh` - Copy built assets to ui/ directory for embedding
 
 ### Package Testing
 - `go test ./xdb -v` - Test database package
@@ -64,12 +65,15 @@ XGO is a comprehensive Go framework providing modular components for web develop
 
 ### Database Layer (xdb)
 - Model-based ORM with chainable query builder
+- Multi-database support: MySQL, PostgreSQL, SQLite
+- Automatic placeholder conversion (`?` → `$1, $2` for PostgreSQL)
 - Built-in caching with automatic invalidation
 - Hook system for data transformation
 - Relationship support (hasOne, hasMany)
 - Transaction support with rollback
 - Validation system
 - Soft delete support via fake delete keys
+- UPSERT operations (InsertOrUpdate, InsertIgnore) with cross-database compatibility
 
 ### Application Framework (xapp)
 - Server lifecycle management
@@ -111,48 +115,6 @@ XGO is a comprehensive Go framework providing modular components for web develop
 - `Retry[T]()` - Generic retry logic with configurable attempts and delays
 - `Stack()` - Formatted stack traces for debugging
 
-## Development Guidelines
-
-### File Organization
-- Keep Go files under 250 lines when practical
-- Limit directories to ~8 files maximum for maintainability
-- Use proper package naming (`x` prefix for framework components)
-- Each `x*` package should be self-contained with minimal cross-dependencies
-
-### Database Models (xdb)
-- Use `xdb.New("table_name")` for basic models
-- Implement custom model functions via `NewModel` option
-- Utilize hooks for data transformation and validation
-- Leverage caching for frequently accessed data
-
-### HTTP Handlers (xhttp & xapp)
-- Use context for request-scoped data
-- Implement proper error handling with structured responses
-- Utilize middleware for cross-cutting concerns
-- xapp provides graceful shutdown - always use App.Run() for production servers
-
-### Admin Interface (xadmin)
-- Define schemas for automatic CRUD generation
-- Use hooks for custom business logic
-- Implement proper validation in BeforeCreate/BeforeUpdate hooks
-
-### Error Handling (xcode)
-- Use `xcode.Code` for structured REST API errors with HTTP codes
-- Implements `error` interface and provides custom JSON marshaling
-- Fields: `Code` (int), `HttpCode` (int), `Message` (string), `Type` (string), `Err` (error)
-
-### Type Operations (xtype)
-- Use fluent methods on collections: `ArrStr{"a","b"}.Filter().Map().Unique()`
-- `Binding(from, to)` for flexible struct marshaling with fuzzy decoding
-- `JsonStrVarReplace()` for template variable substitution in JSON
-
-## Testing Patterns
-
-- Use `testify` for assertions (`github.com/stretchr/testify`)
-- Place tests alongside implementation files (`*_test.go`)
-- Use table-driven tests for multiple scenarios
-- Mock external dependencies appropriately
-
 ## Common Patterns
 
 ### xrequest HTTP Client Usage
@@ -180,10 +142,47 @@ totalBytes, err := resp.ToHttpResponseWriteV2(ginCtx.Writer, func(data []byte) (
 })
 ```
 
+### Database Initialization
+```go
+xdb.Init(xdb.Config{
+    "default": {
+        Driver: "mysql", // or "postgres", "sqlite"
+        DSN:    "user:pass@tcp(localhost:3306)/dbname?charset=utf8mb4&parseTime=True",
+    },
+})
+```
+
 ### Model Usage
 ```go
 m := xdb.New("users", xdb.WithConnection("default"))
 user, err := m.FindById("123")
+```
+
+### Query Conditions (xdb)
+```go
+// Basic conditions
+xdb.WhereEq("field", value)      // field = ?
+xdb.WhereNotEq("field", value)   // field != ?
+xdb.WhereGt("field", value)      // field > ?
+xdb.WhereGte("field", value)     // field >= ?
+xdb.WhereLt("field", value)      // field < ?
+xdb.WhereLte("field", value)     // field <= ?
+xdb.WhereIn("field", []any{1,2}) // field IN (?, ?)
+xdb.WhereLike("field", "%val%")  // field LIKE ?
+xdb.WhereBetween("f", 1, 10)     // f BETWEEN ? AND ?
+xdb.WhereIsNil("field")          // field IS NULL
+xdb.WhereNotNil("field")         // field IS NOT NULL
+
+// OR conditions
+xdb.WhereOrEq("status", 1)
+xdb.WhereGroup(xdb.WhereEq("a", 1), xdb.WhereOrEq("b", 2)) // (a = ? OR b = ?)
+
+// Sorting and pagination
+xdb.OrderByDesc("created_at")
+xdb.OrderByAsc("id")
+xdb.Limit(10)
+xdb.Offset(20)
+xdb.Pagination(page, pageSize)
 ```
 
 ### Application Setup
@@ -236,11 +235,19 @@ result, err := xutil.Retry(ctx, func(ctx context.Context) (Data, error) {
 
 ### Notifications
 ```go
-// Register custom provider (optional)
-xnotify.RegisterProvider("custom", myCustomSender)
-
-// Send notification
 err := xnotify.Notify(ctx, "lark://bot_abc123@user1,user2", "Hello World")
+```
+
+### Rate Limiting
+```go
+// Sliding window rate limiter
+l := limiter.NewSlidingWindow(redisClient, "api_limit", 100, time.Minute)
+allowed, err := l.Allow(ctx, userID)
+
+// Concurrency limiter
+cl := limiter.NewConcurrency(redisClient, "concurrent_jobs", 10)
+release, err := cl.Acquire(ctx, jobID)
+defer release()
 ```
 
 ## Dependencies
@@ -251,6 +258,7 @@ The project uses standard Go modules with key dependencies:
 - Redis for caching and queues
 - JWT libraries for authentication (HMAC & RSA)
 - Vue.js 3 + Element Plus for admin frontend
+- @okiss/oms, @okiss/vbtf for admin UI components
 - Testify for testing assertions
 - Cron v3 for job scheduling
 - gjson/sjson for JSON path operations
