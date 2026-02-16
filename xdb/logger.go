@@ -2,6 +2,7 @@ package xdb
 
 import (
 	"context"
+	"log/slog"
 	"reflect"
 	"time"
 
@@ -65,6 +66,7 @@ func dbLog(ctx context.Context, prefix string, start time.Time, err *error, kv *
 		if fullSQL := buildFullSQL(sqlStmt, rawArgs); fullSQL != "" {
 			_log = append(_log, xlog.String("full_sql", fullSQL))
 		}
+		_log = removeLogFields(_log, "sql", "args")
 	}
 
 	if *err != nil {
@@ -77,6 +79,29 @@ func dbLog(ctx context.Context, prefix string, start time.Time, err *error, kv *
 
 func indexExists(arr []any, index int) bool {
 	return index >= 0 && index < len(arr)
+}
+
+func removeLogFields(logs []any, keys ...string) []any {
+	if len(logs) == 0 || len(keys) == 0 {
+		return logs
+	}
+
+	keySet := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		keySet[key] = struct{}{}
+	}
+
+	filtered := logs[:0]
+	for _, item := range logs {
+		if attr, ok := item.(slog.Attr); ok {
+			if _, exists := keySet[attr.Key]; exists {
+				continue
+			}
+		}
+		filtered = append(filtered, item)
+	}
+
+	return filtered
 }
 
 func buildFullSQL(sqlStmt string, args any) (full string) {
