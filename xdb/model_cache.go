@@ -32,6 +32,8 @@ func (m *model) FindById(id string) (Record, error) {
 }
 
 func (m *model) FindBy(id string) *Row {
+	findByLogPrefix := fmt.Sprintf("%s FindBy", m.table)
+
 	if cache == nil {
 		return &Row{Err: errors.New("cache instance is nil")}
 	}
@@ -58,7 +60,7 @@ func (m *model) FindBy(id string) *Row {
 		if err != nil {
 			return &Row{Err: err}
 		}
-		xlog.Debug("FindBy id:", xlog.Any("id", id), xlog.Any("cache", c))
+		xlog.Debug(findByLogPrefix, xlog.Any("id", id), xlog.Any("cache", c))
 		return &Row{Data: result}
 	}
 
@@ -66,14 +68,14 @@ func (m *model) FindBy(id string) *Row {
 	if row.Err == nil && row.Data != nil {
 		c, err := json.Marshal(row.Data)
 		if err != nil {
-			xlog.Error("json marshal after FindBy id", xlog.Any("id", id), xlog.Err(err))
+			xlog.Error(findByLogPrefix+" json marshal", xlog.Any("id", id), xlog.Err(err))
 			return row
 		}
 		err = cache.Set(context.Background(), key, string(c))
 		if err != nil {
-			xlog.Error("set key after FindBy id", xlog.Any("id", id), xlog.Err(err))
+			xlog.Error(findByLogPrefix+" set key", xlog.Any("id", id), xlog.Err(err))
 		} else {
-			xlog.Debug("set key after FindBy id", xlog.Any("id", id))
+			xlog.Debug(findByLogPrefix+" set key", xlog.Any("id", id))
 		}
 	}
 
