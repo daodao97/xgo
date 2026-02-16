@@ -110,6 +110,8 @@ func (m *model) FindByField(field string, val string) (Record, error) {
 }
 
 func (m *model) FindByKey(key string, val string) *Row {
+	findByKeyLogPrefix := fmt.Sprintf("%s FindByKey", m.table)
+
 	if cache == nil {
 		return &Row{Err: errors.New("cache instance is nil")}
 	}
@@ -127,7 +129,7 @@ func (m *model) FindByKey(key string, val string) *Row {
 	}
 
 	if c != "" {
-		xlog.Debug("FindBy key:", xlog.String("model", m.table), xlog.Any("key", key), xlog.Any("val", val), xlog.Any("cache", c))
+		xlog.Debug(findByKeyLogPrefix, xlog.Any("key", key), xlog.Any("val", val), xlog.Any("cache", c))
 		return m.FindBy(c)
 	}
 
@@ -141,9 +143,9 @@ func (m *model) FindByKey(key string, val string) *Row {
 		cacheKey := row.GetString(key)
 		err = cache.Set(context.Background(), m.cacheKeyPrefix(cacheKey), row.GetString(m.primaryKey))
 		if err != nil {
-			xlog.Error("set key after FindByKey", xlog.Any("key", cacheKey), xlog.Err(err))
+			xlog.Error(findByKeyLogPrefix+" set key", xlog.Any("key", cacheKey), xlog.Err(err))
 		} else {
-			xlog.Debug("set key after FindByKey", xlog.Any("key", cacheKey))
+			xlog.Debug(findByKeyLogPrefix+" set key", xlog.Any("key", cacheKey))
 		}
 	}
 
