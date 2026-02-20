@@ -14,6 +14,13 @@ import (
 	cache2 "github.com/daodao97/xgo/cache"
 )
 
+func (m *model) cacheCtx() context.Context {
+	if m.ctx != nil {
+		return m.ctx
+	}
+	return context.Background()
+}
+
 func (m *model) ClearCache() Model {
 	m.clearCache = true
 	return m
@@ -46,11 +53,11 @@ func (m *model) FindBy(id string) *Row {
 	key := m.cacheKeyPrefix(id)
 
 	if m.clearCache {
-		cache.Del(context.Background(), key)
+		cache.Del(m.cacheCtx(), key)
 		m.clearCache = false
 	}
 
-	c, err := cache.Get(context.Background(), key)
+	c, err := cache.Get(m.cacheCtx(), key)
 	if err != nil && !errors.Is(err, cache2.ErrNotFound) {
 		return &Row{Err: err}
 	}
@@ -71,7 +78,7 @@ func (m *model) FindBy(id string) *Row {
 			xlog.Error(findByLogPrefix+" json marshal", xlog.Any("id", id), xlog.Err(err))
 			return row
 		}
-		err = cache.Set(context.Background(), key, string(c))
+		err = cache.Set(m.cacheCtx(), key, string(c))
 		if err != nil {
 			xlog.Error(findByLogPrefix+" set key", xlog.Any("id", id), xlog.Err(err))
 		} else {
@@ -91,7 +98,7 @@ func (m *model) UpdateBy(id string, record Record) (bool, error) {
 		return false, err
 	}
 	key := m.cacheKeyPrefix(id)
-	err = cache.Del(context.Background(), key)
+	err = cache.Del(m.cacheCtx(), key)
 	if err != nil {
 		xlog.Error("del key after UpdateBy id", xlog.Any("id", id), xlog.Err(err))
 	} else {
@@ -123,7 +130,7 @@ func (m *model) FindByKey(key string, val string) *Row {
 
 	cacheKey := m.cacheKeyPrefix(val)
 
-	c, err := cache.Get(context.Background(), cacheKey)
+	c, err := cache.Get(m.cacheCtx(), cacheKey)
 	if err != nil && !errors.Is(err, cache2.ErrNotFound) {
 		return &Row{Err: err}
 	}
@@ -141,7 +148,7 @@ func (m *model) FindByKey(key string, val string) *Row {
 			return row
 		}
 		cacheKey := row.GetString(key)
-		err = cache.Set(context.Background(), m.cacheKeyPrefix(cacheKey), row.GetString(m.primaryKey))
+		err = cache.Set(m.cacheCtx(), m.cacheKeyPrefix(cacheKey), row.GetString(m.primaryKey))
 		if err != nil {
 			xlog.Error(findByKeyLogPrefix+" set key", xlog.Any("key", cacheKey), xlog.Err(err))
 		} else {

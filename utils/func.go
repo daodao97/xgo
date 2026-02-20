@@ -32,9 +32,35 @@ func IsUrl(str string) bool {
 		return false
 	}
 
-	address := net.ParseIP(url.Host)
+	host := url.Hostname()
+	if host == "" {
+		return false
+	}
+
+	address := net.ParseIP(host)
 	if address == nil {
-		return strings.Contains(url.Host, ".")
+		if !strings.Contains(host, ".") {
+			return false
+		}
+
+		parts := strings.Split(host, ".")
+		allNumeric := true
+		for _, part := range parts {
+			if part == "" {
+				return false
+			}
+			for _, r := range part {
+				if r < '0' || r > '9' {
+					allNumeric = false
+					break
+				}
+			}
+		}
+		// e.g. 192.168.1 is not a valid host/ip
+		if allNumeric {
+			return false
+		}
+		return true
 	}
 
 	return true

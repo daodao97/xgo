@@ -46,27 +46,37 @@ func (l *SlidingWindowLimiter) CanProcess(ctx context.Context, userID, resourceI
 
 // Process 处理请求，如果允许则记录请求时间戳
 func (l *SlidingWindowLimiter) Process(ctx context.Context, userID, resourceID string) bool {
-	if !l.CanProcess(ctx, userID, resourceID) {
-		return false
-	}
-
 	key := l.GetKey(userID, resourceID)
 	now := time.Now()
+	windowStart := now.Add(-l.WindowSize).UnixNano()
+	expireMs := int64((l.WindowSize * 2) / time.Millisecond)
 
-	// 添加当前请求的时间戳到有序集合
-	_, err := l.redisClient.ZAdd(ctx, key, redis.Z{
-		Score:  float64(now.UnixNano()),
-		Member: now.UnixNano(),
-	}).Result()
-
+	const script = `
+redis.call("ZREMRANGEBYSCORE", KEYS[1], "0", ARGV[1])
+local count = redis.call("ZCARD", KEYS[1])
+if count >= tonumber(ARGV[2]) then
+	return 0
+end
+redis.call("ZADD", KEYS[1], ARGV[3], ARGV[4])
+if tonumber(ARGV[5]) > 0 then
+	redis.call("PEXPIRE", KEYS[1], ARGV[5])
+end
+return 1
+`
+	res, err := l.redisClient.Eval(
+		ctx,
+		script,
+		[]string{key},
+		windowStart,
+		l.Limit,
+		now.UnixNano(),
+		now.UnixNano(),
+		expireMs,
+	).Int64()
 	if err != nil {
 		return false
 	}
-
-	// 设置键的过期时间，防止内存泄漏
-	l.redisClient.Expire(ctx, key, l.WindowSize*2)
-
-	return true
+	return res == 1
 }
 
 // Finish 完成请求处理

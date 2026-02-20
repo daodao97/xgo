@@ -123,7 +123,7 @@ func (m *model) Transaction(fn func(*sql.Tx, Model) error) error {
 		return err
 	}
 
-	err = fn(tx, m)
+	err = fn(tx, m.Tx(tx))
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -804,6 +804,11 @@ func (m *model) Delete(opt ...Option) (ok bool, err error) {
 }
 
 func (m *model) DelCache(opt ...Option) {
+	ctx := m.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	cacheKey := append(m.cacheKey, m.primaryKey)
 	cacheKey = append(cacheKey, FieldsInWhere(opt...)...)
 	cacheKey = UniqueString(cacheKey)
@@ -816,7 +821,7 @@ func (m *model) DelCache(opt ...Option) {
 			// if update primary key, delete old cache
 			if k == m.primaryKey {
 				key := m.cacheKeyPrefix(cast.ToString(val))
-				err = cache.Del(context.Background(), key)
+				err = cache.Del(ctx, key)
 				if err != nil {
 					xlog.ErrorC(m.ctx, "del key after update", xlog.Any(k, val), xlog.Err(err))
 				} else {
@@ -826,10 +831,10 @@ func (m *model) DelCache(opt ...Option) {
 			}
 			// if update other field, delete cache by primary key
 			cacheFieldKey := m.cacheKeyPrefix(cast.ToString(val))
-			cachedPk, _ := cache.Get(context.Background(), cacheFieldKey)
-			cache.Del(context.Background(), cacheFieldKey)
+			cachedPk, _ := cache.Get(ctx, cacheFieldKey)
+			cache.Del(ctx, cacheFieldKey)
 			if cachedPk != "" {
-				err = cache.Del(context.Background(), m.cacheKeyPrefix(cachedPk))
+				err = cache.Del(ctx, m.cacheKeyPrefix(cachedPk))
 				if err != nil {
 					xlog.ErrorC(m.ctx, "del key after update", xlog.String("cachePk", cachedPk), xlog.Any(k, val), xlog.Err(err))
 				} else {

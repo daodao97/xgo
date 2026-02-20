@@ -10,15 +10,21 @@ import (
 )
 
 var queueContainer = make(map[string]Queue)
-var queueLock sync.Mutex
+var queueLock sync.RWMutex
 
 func init() {
-	queueLock = sync.Mutex{}
+	queueLock = sync.RWMutex{}
 }
 
 func AddQueue(redis redis.UniversalClient, topic string, handler func(data string), workers int) Queue {
 	queueLock.Lock()
 	defer queueLock.Unlock()
+	if q, ok := queueContainer[topic]; ok {
+		return q
+	}
+	if workers <= 0 {
+		workers = 1
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	queue := &RedisQueue{
 		redis:   redis,
@@ -36,8 +42,8 @@ func AddQueue(redis redis.UniversalClient, topic string, handler func(data strin
 }
 
 func GetQueue(topic string) Queue {
-	queueLock.Lock()
-	defer queueLock.Unlock()
+	queueLock.RLock()
+	defer queueLock.RUnlock()
 
 	return queueContainer[topic]
 }
@@ -114,15 +120,16 @@ func (q *RedisQueue) Subscribe() error {
 			if !ok {
 				return nil
 			}
-			q.jobs <- msg.Payload // 将消息发送到任务队列
+			select {
+			case <-q.ctx.Done():
+				return nil
+			case q.jobs <- msg.Payload: // 将消息发送到任务队列
+			}
 		}
 	}
 }
 
 func (q *RedisQueue) Close() error {
-	queueLock.Lock()
-	defer queueLock.Unlock()
-
 	// 1. 停止接收新消息
 	q.cancel()
 	xlog.Debug("stopped accepting new messages", xlog.String("topic", q.topic))
@@ -132,7 +139,9 @@ func (q *RedisQueue) Close() error {
 	xlog.Debug("all messages processed", xlog.String("topic", q.topic))
 
 	// 3. 从容器中删除
+	queueLock.Lock()
 	delete(queueContainer, q.topic)
+	queueLock.Unlock()
 
 	// 4. 关闭订阅
 	xlog.Debug("closing subscribe", xlog.String("topic", q.topic))

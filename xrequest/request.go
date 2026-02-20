@@ -232,7 +232,7 @@ func (r *Request) Patch(targetUrl string) (resp *Response, err error) {
 }
 
 func (r *Request) Do() (resp *Response, err error) {
-	if r.retryAttempts == 0 {
+	if r.retryAttempts == 0 || !r.isRetryBodySafe() {
 		return r.do()
 	}
 
@@ -244,6 +244,9 @@ func (r *Request) Do() (resp *Response, err error) {
 		if !r.shouldRetry(resp, err) {
 			return resp, err
 		}
+		if resp != nil {
+			_ = resp.Close()
+		}
 
 		lastResp = resp
 		lastErr = err
@@ -251,8 +254,32 @@ func (r *Request) Do() (resp *Response, err error) {
 			time.Sleep(r.retryDelay)
 		}
 	}
+	if lastErr == nil && lastResp != nil {
+		lastErr = fmt.Errorf("request failed after %d attempts, status: %d", r.retryAttempts, lastResp.StatusCode())
+	}
 
 	return lastResp, lastErr
+}
+
+// Retries are only safe when the request body can be rebuilt per attempt.
+func (r *Request) isRetryBodySafe() bool {
+	if len(r.files) > 0 {
+		return false
+	}
+
+	// Generic io.Reader bodies are usually one-shot streams.
+	if r.body != nil {
+		if _, ok := r.body.(io.Reader); ok {
+			switch r.body.(type) {
+			case string, []byte:
+				return true
+			default:
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 func (r *Request) shouldRetry(resp *Response, err error) bool {
@@ -272,6 +299,11 @@ func (r *Request) do() (*Response, error) {
 	ctx := r.ctx
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if r.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, r.timeout)
+		defer cancel()
 	}
 
 	r.debug = RequestDebug
@@ -302,9 +334,6 @@ func (r *Request) do() (*Response, error) {
 		} else {
 			client = GetDefaultProxyClient()
 		}
-	}
-	if r.timeout > 0 {
-		client.Timeout = r.timeout
 	}
 
 	start := time.Now()

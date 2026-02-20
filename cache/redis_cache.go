@@ -28,10 +28,7 @@ func NewRedisCache(options *redis.Options, option ...RedisOption) *RedisCache {
 	client := redis.NewClient(options)
 
 	// 检查是否能连接到 Redis 服务器
-	_, err := client.Ping(context.Background()).Result()
-	if err != nil {
-		panic("failed to connect to Redis")
-	}
+	_, _ = client.Ping(context.Background()).Result()
 
 	c := &RedisCache{
 		client: client,
@@ -46,10 +43,7 @@ func NewRedisCache(options *redis.Options, option ...RedisOption) *RedisCache {
 // NewRedis 创建一个新的 RedisCache 实例
 func NewRedis(client redis.UniversalClient, option ...RedisOption) *RedisCache {
 	// 检查是否能连接到 Redis 服务器
-	_, err := client.Ping(context.Background()).Result()
-	if err != nil {
-		panic("failed to connect to Redis")
-	}
+	_, _ = client.Ping(context.Background()).Result()
 
 	c := &RedisCache{
 		client: client,
