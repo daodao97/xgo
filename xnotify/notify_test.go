@@ -38,14 +38,28 @@ func TestParseBotIDWeWork(t *testing.T) {
 }
 
 func TestParseBotIDWithQueryMention(t *testing.T) {
-	Notify(context.Background(), "wework://9sxxx5@11600000032", "hello")
-
-	Notify(context.Background(), "lark://2xxxxx97@刀刀", "hello")
+	target, err := parseBotID("wework://key123@13800001111?mention=@all,13800001111")
+	if err != nil {
+		t.Fatalf("parseBotID err: %v", err)
+	}
+	wantMentions := []string{"13800001111", "@all"}
+	if len(target.mentions) != len(wantMentions) {
+		t.Fatalf("mentions length mismatch, got %#v", target.mentions)
+	}
+	for i, m := range wantMentions {
+		if target.mentions[i] != m {
+			t.Fatalf("mention mismatch at %d, got %s", i, target.mentions[i])
+		}
+	}
 }
 
 func TestParseBotIDInvalid(t *testing.T) {
-	if _, err := parseBotID("foo://id"); err == nil {
-		t.Fatalf("expected error for invalid scheme")
+	// 仅校验格式合法性；具体 provider 是否支持由 Notify 阶段判断。
+	if _, err := parseBotID("foo://id"); err != nil {
+		t.Fatalf("unexpected parse error for custom scheme: %v", err)
+	}
+	if _, err := parseBotID("foo"); err == nil {
+		t.Fatalf("expected error for malformed bot id")
 	}
 	if _, err := parseBotID("lark://"); err == nil {
 		t.Fatalf("expected error for missing bot id")
@@ -87,6 +101,91 @@ func TestNotifyRoutesToSender(t *testing.T) {
 	}
 }
 
+func TestNotifyWithOptionsRoutesToOptionSender(t *testing.T) {
+	fs := &fakeOptionSender{}
+	if err := RegisterProvider("fakeopt", fs); err != nil {
+		t.Fatalf("register provider err: %v", err)
+	}
+
+	err := NotifyWithOptions(
+		context.Background(),
+		"fakeopt://abc@u1,u1?mention=u2",
+		"hello",
+		WithMessageType(MessageTypeMarkdown),
+		WithMentions("u2", "u3"),
+	)
+	if err != nil {
+		t.Fatalf("notify err: %v", err)
+	}
+
+	if !fs.usedOptions {
+		t.Fatalf("expected SendWithOptions to be called")
+	}
+	if fs.botID != "abc" {
+		t.Fatalf("bot id mismatch, got %s", fs.botID)
+	}
+	if fs.message != "hello" {
+		t.Fatalf("message mismatch, got %s", fs.message)
+	}
+	if fs.options.MessageType != MessageTypeMarkdown {
+		t.Fatalf("message type mismatch, got %s", fs.options.MessageType)
+	}
+
+	wantMentions := []string{"u1", "u2", "u3"}
+	if len(fs.mentions) != len(wantMentions) {
+		t.Fatalf("mentions length mismatch, got %#v", fs.mentions)
+	}
+	for i, m := range wantMentions {
+		if fs.mentions[i] != m {
+			t.Fatalf("mention mismatch at %d, got %s", i, fs.mentions[i])
+		}
+	}
+}
+
+func TestNotifyWithOptionsFallbackToLegacySender(t *testing.T) {
+	fs := &fakeSender{}
+	if err := RegisterProvider("fakelegacy", fs); err != nil {
+		t.Fatalf("register provider err: %v", err)
+	}
+
+	err := NotifyWithOptions(
+		context.Background(),
+		"fakelegacy://abc@u1?mention=u2",
+		"hello",
+		WithMentions("u3"),
+	)
+	if err != nil {
+		t.Fatalf("notify err: %v", err)
+	}
+
+	wantMentions := []string{"u1", "u2", "u3"}
+	if len(fs.mentions) != len(wantMentions) {
+		t.Fatalf("mentions length mismatch, got %#v", fs.mentions)
+	}
+	for i, m := range wantMentions {
+		if fs.mentions[i] != m {
+			t.Fatalf("mention mismatch at %d, got %s", i, fs.mentions[i])
+		}
+	}
+}
+
+func TestNotifyWithOptionsRejectsNonTextOnLegacySender(t *testing.T) {
+	fs := &fakeSender{}
+	if err := RegisterProvider("fakelegacy2", fs); err != nil {
+		t.Fatalf("register provider err: %v", err)
+	}
+
+	err := NotifyWithOptions(
+		context.Background(),
+		"fakelegacy2://abc",
+		"hello",
+		WithMessageType(MessageTypeMarkdown),
+	)
+	if err == nil {
+		t.Fatalf("expected error for non-text message type on legacy sender")
+	}
+}
+
 type fakeSender struct {
 	botID    string
 	message  string
@@ -97,5 +196,20 @@ func (f *fakeSender) Send(_ context.Context, botID string, message string, menti
 	f.botID = botID
 	f.message = message
 	f.mentions = mentions
+	return nil
+}
+
+type fakeOptionSender struct {
+	fakeSender
+	options     NotifyOptions
+	usedOptions bool
+}
+
+func (f *fakeOptionSender) SendWithOptions(_ context.Context, botID string, message string, mentions []string, options NotifyOptions) error {
+	f.botID = botID
+	f.message = message
+	f.mentions = mentions
+	f.options = options
+	f.usedOptions = true
 	return nil
 }

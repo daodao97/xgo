@@ -14,8 +14,40 @@ const (
 	WeWorkScheme = "wework"
 )
 
+const (
+	MessageTypeText       = "text"
+	MessageTypeMarkdown   = "markdown"
+	MessageTypeMarkdownV2 = "markdown_v2"
+)
+
 type Sender interface {
 	Send(ctx context.Context, botID string, message string, mentions []string) error
+}
+
+// OptionSender is an optional extension for providers that support rich options.
+type OptionSender interface {
+	SendWithOptions(ctx context.Context, botID string, message string, mentions []string, options NotifyOptions) error
+}
+
+type NotifyOptions struct {
+	// MessageType defaults to "text".
+	MessageType string
+	// Mentions will be merged with mentions parsed from botID.
+	Mentions []string
+}
+
+type NotifyOption func(*NotifyOptions)
+
+func WithMessageType(messageType string) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.MessageType = strings.TrimSpace(messageType)
+	}
+}
+
+func WithMentions(mentions ...string) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.Mentions = append(o.Mentions, mentions...)
+	}
 }
 
 var (
@@ -52,6 +84,11 @@ func getProvider(scheme string) (Sender, bool) {
 // - wework://{bot_id}
 // Query string `?mention=` is also supported and merged with the @ suffix.
 func Notify(ctx context.Context, botID, message string) error {
+	return NotifyWithOptions(ctx, botID, message)
+}
+
+// NotifyWithOptions routes the message with options (such as message type).
+func NotifyWithOptions(ctx context.Context, botID, message string, opts ...NotifyOption) error {
 	target, err := parseBotID(botID)
 	if err != nil {
 		return err
@@ -62,7 +99,18 @@ func Notify(ctx context.Context, botID, message string) error {
 		return fmt.Errorf("unsupported provider: %s", target.scheme)
 	}
 
-	return sender.Send(ctx, target.botID, message, target.mentions)
+	options := buildNotifyOptions(opts...)
+	mergedMentions := mergeMentions(target.mentions, options.Mentions)
+
+	if optionSender, ok := sender.(OptionSender); ok {
+		options.Mentions = mergedMentions
+		return optionSender.SendWithOptions(ctx, target.botID, message, mergedMentions, options)
+	}
+
+	if options.MessageType != MessageTypeText {
+		return fmt.Errorf("provider %s does not support message type: %s", target.scheme, options.MessageType)
+	}
+	return sender.Send(ctx, target.botID, message, mergedMentions)
 }
 
 type botTarget struct {
@@ -122,26 +170,49 @@ func buildTarget(scheme, body string) (botTarget, error) {
 }
 
 func collectMentions(segments []string, queryMentions string) []string {
-	var mentions []string
+	var pathMentions []string
 	if len(segments) == 2 {
-		mentions = append(mentions, strings.Split(segments[1], ",")...)
+		pathMentions = strings.Split(segments[1], ",")
 	}
-	if queryMentions != "" {
-		mentions = append(mentions, strings.Split(queryMentions, ",")...)
+	var queryMentionList []string
+	if strings.TrimSpace(queryMentions) != "" {
+		queryMentionList = strings.Split(queryMentions, ",")
 	}
+	return mergeMentions(pathMentions, queryMentionList)
+}
 
+func buildNotifyOptions(opts ...NotifyOption) NotifyOptions {
+	options := NotifyOptions{
+		MessageType: MessageTypeText,
+	}
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(&options)
+	}
+	if strings.TrimSpace(options.MessageType) == "" {
+		options.MessageType = MessageTypeText
+	}
+	options.Mentions = mergeMentions(options.Mentions)
+	return options
+}
+
+func mergeMentions(mentionGroups ...[]string) []string {
 	seen := make(map[string]struct{})
 	var normalized []string
-	for _, m := range mentions {
-		m = strings.TrimSpace(m)
-		if m == "" {
-			continue
+	for _, mentions := range mentionGroups {
+		for _, m := range mentions {
+			m = strings.TrimSpace(m)
+			if m == "" {
+				continue
+			}
+			if _, ok := seen[m]; ok {
+				continue
+			}
+			seen[m] = struct{}{}
+			normalized = append(normalized, m)
 		}
-		if _, ok := seen[m]; ok {
-			continue
-		}
-		seen[m] = struct{}{}
-		normalized = append(normalized, m)
 	}
 	return normalized
 }
