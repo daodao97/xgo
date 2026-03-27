@@ -340,6 +340,17 @@ m := xdb.New("users",
 
 // Delete 实际执行 UPDATE ... SET is_deleted = 1
 // Select 自动添加 WHERE is_deleted = 0
+
+m2 := xdb.New("users",
+    xdb.WithDeletedAtKey("deleted_at"),
+)
+
+// Delete 实际执行 UPDATE ... SET deleted_at = 当前时间
+// Select 自动添加 WHERE deleted_at IS NULL
+
+// 也可以同时配置两个字段
+// Delete 会同时写入 is_deleted = 1 和 deleted_at = 当前时间
+// Select 会同时追加 WHERE is_deleted = 0 AND deleted_at IS NULL
 ```
 
 ## 缓存
