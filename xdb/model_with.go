@@ -24,6 +24,12 @@ func WithFakeDelKey(name string) With {
 	}
 }
 
+func WithDeletedAtKey(name string) With {
+	return func(b *model) {
+		b.deletedAtKey = name
+	}
+}
+
 func WithPrimaryKey(name string) With {
 	return func(b *model) {
 		b.primaryKey = name

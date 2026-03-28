@@ -55,6 +55,7 @@ type model struct {
 	table           string
 	tableFunc       func() string
 	fakeDelKey      string
+	deletedAtKey    string
 	primaryKey      string
 	cacheKey        []string
 	columnHook      map[string]HookData
@@ -143,6 +144,7 @@ func (m *model) Tx(tx *sql.Tx) Model {
 		database:        m.database,
 		table:           m.table,
 		fakeDelKey:      m.fakeDelKey,
+		deletedAtKey:    m.deletedAtKey,
 		primaryKey:      m.primaryKey,
 		cacheKey:        m.cacheKey,
 		columnHook:      m.columnHook,
@@ -183,9 +185,7 @@ func (m *model) Select(opt ...Option) (rows *Rows) {
 	}
 	opts := new(Options)
 	opt = append(opt, table(m.getTableName()), database(m.database))
-	if m.fakeDelKey != "" {
-		opt = append(opt, WhereEq(m.fakeDelKey, 0))
-	}
+	opt = append(opt, m.softDeleteWhereOptions()...)
 	for _, o := range opt {
 		o(opts)
 	}
@@ -766,12 +766,12 @@ func (m *model) Delete(opt ...Option) (ok bool, err error) {
 	}
 
 	opt = append(opt, table(m.getTableName()))
-	if m.fakeDelKey != "" {
+	if m.hasSoftDelete() {
 		m.enableValidator = false
 		defer func() {
 			m.enableValidator = true
 		}()
-		return m.Update(map[string]any{m.fakeDelKey: 1}, opt...)
+		return m.Update(m.softDeleteRecord(), opt...)
 	}
 
 	var kv []any
@@ -801,6 +801,32 @@ func (m *model) Delete(opt ...Option) (ok bool, err error) {
 	m.DelCache(opt...)
 
 	return effect > int64(0), nil
+}
+
+func (m *model) hasSoftDelete() bool {
+	return m.fakeDelKey != "" || m.deletedAtKey != ""
+}
+
+func (m *model) softDeleteWhereOptions() []Option {
+	var opts []Option
+	if m.fakeDelKey != "" {
+		opts = append(opts, WhereEq(m.fakeDelKey, 0))
+	}
+	if m.deletedAtKey != "" {
+		opts = append(opts, WhereIsNil(m.deletedAtKey))
+	}
+	return opts
+}
+
+func (m *model) softDeleteRecord() Record {
+	record := make(Record)
+	if m.fakeDelKey != "" {
+		record[m.fakeDelKey] = 1
+	}
+	if m.deletedAtKey != "" {
+		record[m.deletedAtKey] = time.Now()
+	}
+	return record
 }
 
 func (m *model) DelCache(opt ...Option) {
