@@ -139,7 +139,7 @@ func NewGin(opts ...AppOption) *gin.Engine {
 
 		// 结束时间
 		end := time.Now()
-		duration := end.Sub(start)
+		duration := end.Sub(start).Milliseconds()
 
 		// 根据状态码选择日志级别
 		logFunc := xlog.DebugC
@@ -155,7 +155,7 @@ func NewGin(opts ...AppOption) *gin.Engine {
 		args := []any{
 			slog.String("client_ip", c.ClientIP()),
 			slog.String("time", end.Format(time.DateTime)),
-			slog.Duration("duration", duration),
+			slog.Any("duration", duration),
 			slog.String("method", c.Request.Method),
 			slog.String("path", c.Request.URL.Path),
 		}

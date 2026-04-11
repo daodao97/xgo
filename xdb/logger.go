@@ -27,7 +27,7 @@ func Error(msg string, kv ...any) {
 }
 
 func dbLog(ctx context.Context, prefix string, start time.Time, err *error, kv *[]any) {
-	tc := time.Since(start)
+	tc := time.Since(start).Milliseconds()
 
 	_log := []any{
 		xlog.String("method", prefix),
