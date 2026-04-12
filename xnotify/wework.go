@@ -2,13 +2,14 @@ package xnotify
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/daodao97/xgo/xrequest"
 )
 
-const wecomWebhookURL = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key="
+var wecomWebhookURL = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key="
 const (
 	wecomMsgTypeText       = MessageTypeText
 	wecomMsgTypeMarkdown   = MessageTypeMarkdown
@@ -16,6 +17,11 @@ const (
 )
 
 type weworkSender struct{}
+
+type wecomResponse struct {
+	ErrCode int    `json:"errcode"`
+	ErrMsg  string `json:"errmsg"`
+}
 
 func SendWeComText(ctx context.Context, botID, content string, mentionedMobiles []string) error {
 	return sendWeCom(ctx, botID, buildWeComTextPayload(content, mentionedMobiles))
@@ -67,8 +73,20 @@ func sendWeCom(ctx context.Context, botID string, data map[string]any) error {
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode() >= 400 {
-		return fmt.Errorf("wecom send failed, status: %d", resp.StatusCode())
+	defer resp.Close()
+	return parseWeComResponse(resp.StatusCode(), resp.Bytes())
+}
+
+func parseWeComResponse(statusCode int, body []byte) error {
+	if statusCode >= 400 {
+		return fmt.Errorf("wecom send failed, status: %d", statusCode)
+	}
+	var result wecomResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("wecom send failed, decode response: %w", err)
+	}
+	if result.ErrCode != 0 {
+		return fmt.Errorf("wecom send failed, errcode: %d, errmsg: %s", result.ErrCode, result.ErrMsg)
 	}
 	return nil
 }

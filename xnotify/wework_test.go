@@ -1,6 +1,8 @@
 package xnotify
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestBuildWeComTextPayload(t *testing.T) {
 	payload := buildWeComTextPayload("hello", []string{"13800001111", "@all"})
@@ -61,5 +63,15 @@ func TestBuildWeComMarkdownV2Payload(t *testing.T) {
 	}
 	if markdownV2["content"] != "# title" {
 		t.Fatalf("markdown_v2 content mismatch, got %v", markdownV2["content"])
+	}
+}
+
+func TestParseWeComResponseReturnsBusinessError(t *testing.T) {
+	err := parseWeComResponse(200, []byte(`{"errcode":93000,"errmsg":"invalid webhook key"}`))
+	if err == nil {
+		t.Fatal("expected business error, got nil")
+	}
+	if got := err.Error(); got != "wecom send failed, errcode: 93000, errmsg: invalid webhook key" {
+		t.Fatalf("unexpected error: %s", got)
 	}
 }
