@@ -6,10 +6,16 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/daodao97/xgo/xlog"
 	"github.com/jessevdk/go-flags"
+)
+
+var (
+	signalNotify = signal.Notify
+	signalStop   = signal.Stop
 )
 
 type Startup func() error
@@ -25,6 +31,10 @@ type BeforeStart func()
 type Server interface {
 	Start() error
 	Stop()
+}
+
+type readinessServer interface {
+	Started() <-chan struct{}
 }
 
 var Args struct {
@@ -86,32 +96,55 @@ func (a *App) Run() error {
 	// 启动所有 Server
 	errChan := make(chan error, len(a.servers))
 	var wg sync.WaitGroup
+	var startupFailed atomic.Bool
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var servers []Server
+	servers := make([]Server, 0, len(a.servers))
+	readyChans := make([]<-chan struct{}, 0, len(a.servers))
+	for _, newServer := range a.servers {
+		server := newServer()
+		servers = append(servers, server)
 
-	for _, server := range a.servers {
+		ready := make(chan struct{})
+		var readyOnce sync.Once
+		closeReady := func() {
+			readyOnce.Do(func() {
+				close(ready)
+			})
+		}
+		if startedServer, ok := server.(readinessServer); ok {
+			go func(started <-chan struct{}) {
+				<-started
+				closeReady()
+			}(startedServer.Started())
+		}
+		readyChans = append(readyChans, ready)
+
 		wg.Add(1)
-		go func(s NewServer) {
+		go func(s Server, closeReady func(), readyBySignal bool) {
 			defer wg.Done()
-			_s := s()
-			servers = append(servers, _s)
-			if err := _s.Start(); err != nil {
+			if !readyBySignal {
+				closeReady()
+			}
+			if err := s.Start(); err != nil {
+				startupFailed.Store(true)
+				closeReady()
 				errChan <- err
 				cancel()
 			}
-		}(server)
+		}(server, closeReady, isReadyByStartCall(server))
 	}
 
-	if a.afterStarted != nil {
+	if a.afterStarted != nil && waitForServersReady(ctx, readyChans) && !startupFailed.Load() {
 		a.afterStarted()
 	}
 
 	// 处理信号
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	signalNotify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	defer signalStop(sigChan)
 
 	var signalCount int
 	shutdownChan := make(chan struct{})
@@ -142,6 +175,11 @@ func (a *App) Run() error {
 	case <-shutdownChan:
 		xlog.Debug("Starting graceful shutdown...")
 	case <-ctx.Done():
+		select {
+		case err := <-errChan:
+			return fmt.Errorf("server error: %w", err)
+		default:
+		}
 		xlog.Warn("Context cancelled")
 	}
 
@@ -154,6 +192,22 @@ func (a *App) Run() error {
 	wg.Wait()
 	xlog.Debug("All servers stopped")
 	return nil
+}
+
+func isReadyByStartCall(server Server) bool {
+	_, ok := server.(readinessServer)
+	return ok
+}
+
+func waitForServersReady(ctx context.Context, readyChans []<-chan struct{}) bool {
+	for _, ready := range readyChans {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-ready:
+		}
+	}
+	return true
 }
 
 func ParserFlags(dest any) {

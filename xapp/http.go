@@ -2,7 +2,10 @@ package xapp
 
 import (
 	"context"
+	"errors"
+	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/daodao97/xgo/xlog"
@@ -17,7 +20,9 @@ func NewHttp(addr string, handler func() http.Handler) NewServer {
 }
 
 type HTTPServer struct {
-	server *http.Server
+	server      *http.Server
+	started     chan struct{}
+	startedOnce sync.Once
 }
 
 func NewHTTPServer(addr string, handler func() http.Handler) *HTTPServer {
@@ -32,12 +37,28 @@ func NewHTTPServer(addr string, handler func() http.Handler) *HTTPServer {
 			Addr:    addr,
 			Handler: handler(),
 		},
+		started: make(chan struct{}),
 	}
 }
 
 func (s *HTTPServer) Start() error {
 	xlog.Debug("Starting HTTP server on", xlog.String("port", s.server.Addr))
-	return s.server.ListenAndServe()
+	ln, err := net.Listen("tcp", s.server.Addr)
+	if err != nil {
+		return err
+	}
+	s.startedOnce.Do(func() {
+		close(s.started)
+	})
+	err = s.server.Serve(ln)
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+
+func (s *HTTPServer) Started() <-chan struct{} {
+	return s.started
 }
 
 func (s *HTTPServer) Stop() {
