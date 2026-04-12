@@ -60,14 +60,19 @@ func StartServer(handler http.Handler, addr string, shutdownTimeout time.Duratio
 	<-upg.Exit()
 	xlog.Info("shutting down...")
 
-	// Make sure to set a deadline on exiting the process
-	// after upg.Exit() is closed. No new upgrades can be
-	// performed if the parent doesn't exit.
-	time.AfterFunc(shutdownTimeout, func() {
-		log.Println("Graceful shutdown timed out")
-		os.Exit(1)
-	})
+	shutdownServer(shutdownTimeout, server.Shutdown, os.Exit)
+}
 
-	// Wait for connections to drain.
-	server.Shutdown(context.Background())
+func shutdownServer(shutdownTimeout time.Duration, shutdownFn func(context.Context) error, exitFn func(int)) {
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	if err := shutdownFn(ctx); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			log.Println("Graceful shutdown timed out")
+			exitFn(1)
+			return
+		}
+		log.Println("Graceful shutdown failed:", err)
+	}
 }
