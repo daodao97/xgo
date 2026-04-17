@@ -238,6 +238,7 @@ func NewGinHttpServer(addr string, engine func() *gin.Engine) NewServer {
 				Addr:    addr,
 				Handler: engine(),
 			},
+			started: make(chan struct{}),
 		}
 	}
 }
