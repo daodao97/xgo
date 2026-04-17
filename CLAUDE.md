@@ -6,6 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 XGO is a comprehensive Go framework providing modular components for web development, database operations, caching, logging, and admin interfaces. The project follows a modular architecture with each package (`x*`) providing specific functionality.
 
+The repository structure:
+- Core packages at root level (xapp, xdb, xhttp, etc.)
+- `example/` contains sample applications (admin, sliding_window_example, xproxy)
+- `cmd/` is empty (applications are expected in user projects)
+- `tests/` contains test fixtures
+- `xadmin/adminui/` is a Vue.js frontend with built assets embedded in `xadmin/ui/`
+
 ## Common Commands
 
 ### Build and Test
@@ -49,19 +56,29 @@ XGO is a comprehensive Go framework providing modular components for web develop
 - **limiter**: Rate limiting with sliding window and concurrency controls
 - **xproxy**: HTTP proxy and static file serving
 - **xredis**: Redis utilities and connection management
-- **xcron**: Cron job scheduling with logging support
+- **xcron**: Cron job scheduling with distributed locking via Redis SETNX
 - **xtrace**: Request tracing utilities for Gin
 - **xrequest**: HTTP client with retry and proxy support
-- **xnotify**: Multi-provider notification system (Lark/Feishu, WeWork)
+- **xnotify**: Multi-provider notification system (Lark/Feishu, WeWork, Bark)
 
 ### Utility Modules
 - **xcode**: Structured error/code type for REST API responses
 - **xjson**: Fluent JSON path navigation and manipulation (wraps gjson/sjson)
 - **xtype**: Type system extensions, collection operations, and advanced JSON binding
 - **xutil**: Safe goroutine management, retry logic, and stack trace utilities
-- **xenv**: Environment detection helpers (dev/prod)
+- **xenv**: Environment detection helpers (dev/prod) - Note: currently checks `APP_NEV` env var (typo)
 - **xctx**: Type-safe context key definitions
 - **utils**: General purpose helpers (JSON serialization, URL validation, etc.)
+- **xresty**: Thin wrapper around go-resty/resty for simpler HTTP client usage
+
+### Logging (xlog)
+- Built on Go's standard `log/slog` package with custom handlers
+- Pretty-printed colored output for development (`StdoutTextPretty`)
+- JSON output for production (`StdoutJson`, `FileJson`)
+- File rotation via lumberjack
+- Trace ID integration via `xtrace`
+- Helper functions: `xlog.Debug()`, `xlog.Info()`, `xlog.Warn()`, `xlog.Error()`
+- Attribute helpers: `xlog.Any()`, `xlog.Err()`
 
 ### Database Layer (xdb)
 - Model-based ORM with chainable query builder
@@ -105,8 +122,20 @@ XGO is a comprehensive Go framework providing modular components for web develop
 
 ### Notification System (xnotify)
 - Provider-based architecture for multiple notification backends
-- Built-in support for Lark/Feishu and WeWork webhooks
-- URL format: `lark://bot_id@mention1,mention2` or `wework://bot_id`
+- Built-in support for Lark/Feishu, WeWork, and Bark
+- URL format examples:
+  - `lark://bot_id@mention1,mention2`
+  - `wework://bot_id`
+  - `wework://bot_id@13800001111,@all`
+  - `bark://device_key`
+  - `bark://key1,key2`
+  - `bark://host/key1,key2`
+  - `bark://http://127.0.0.1:8080/device_key`
+- Provider capabilities:
+  - Lark: text messages with optional `@user` mentions
+  - WeWork: `text`, `markdown`, `markdown_v2`
+  - Bark: text notifications, rich options, multi-key fan-out, self-hosted endpoint support
+- Bark multi-key uses comma-separated keys and internally fans out into multiple independent requests
 - Extensible via `RegisterProvider()` for custom integrations
 
 ### Safe Async Operations (xutil)
@@ -236,6 +265,27 @@ result, err := xutil.Retry(ctx, func(ctx context.Context) (Data, error) {
 ### Notifications
 ```go
 err := xnotify.Notify(ctx, "lark://bot_abc123@user1,user2", "Hello World")
+
+err := xnotify.NotifyWithOptions(
+    ctx,
+    "wework://key123",
+    "**hello wework**",
+    xnotify.WithMessageType(xnotify.MessageTypeMarkdown),
+)
+
+err := xnotify.Notify(ctx, "bark://key1,key2", "Hello Bark")
+
+err := xnotify.NotifyWithOptions(
+    ctx,
+    "bark://device_key",
+    "body",
+    xnotify.WithTitle("title"),
+    xnotify.WithSubtitle("subtitle"),
+    xnotify.WithGroup("ops"),
+    xnotify.WithSound("alarm"),
+)
+
+err := xnotify.Notify(ctx, "bark://http://127.0.0.1:8080/device_key", "Hello self-hosted Bark")
 ```
 
 ### Rate Limiting
@@ -254,15 +304,19 @@ defer release()
 
 The project uses standard Go modules with key dependencies:
 - Gin for HTTP routing
-- GORM-style database operations (custom implementation)
-- Redis for caching and queues
-- JWT libraries for authentication (HMAC & RSA)
+- Custom database/sql-based ORM (not GORM)
+- Redis (go-redis/v9) for caching, queues, and distributed locks
+- golang-jwt/jwt/v5 for authentication (HMAC & RSA)
+- go-resty/resty for HTTP client operations
+- bogdanfinn/tls-client for TLS fingerprinting in xproxy
 - Vue.js 3 + Element Plus for admin frontend
 - @okiss/oms, @okiss/vbtf for admin UI components
 - Testify for testing assertions
-- Cron v3 for job scheduling
+- robfig/cron/v3 for job scheduling
 - gjson/sjson for JSON path operations
-- Decimal for precise decimal arithmetic
+- shopspring/decimal for precise decimal arithmetic
+- log/slog (stdlib) for structured logging
+- jessevdk/go-flags for CLI argument parsing
 
 ## Key Architectural Patterns
 
@@ -294,6 +348,9 @@ The xdb package uses a unified Model interface that supports:
 ### Provider Pattern (xnotify)
 The notification system uses a registry pattern:
 - Providers are registered via `RegisterProvider(scheme, sender)`
-- Built-in providers for "lark" and "wework" schemes
+- Built-in providers for "lark", "wework", and "bark" schemes
 - URL-based routing: `scheme://botid@mentions`
+- WeWork supports message type switching via `NotifyWithOptions(..., WithMessageType(...))`
+- Bark supports `scheme://key1,key2` multi-key fan-out and `scheme://host/key`
+- Bark rich options include title/subtitle/group/url/sound/icon/badge/call/autocopy/archive
 - Extensible for custom notification backends

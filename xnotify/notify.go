@@ -12,6 +12,7 @@ import (
 const (
 	LarkScheme   = "lark"
 	WeWorkScheme = "wework"
+	BarkScheme   = "bark"
 )
 
 const (
@@ -34,6 +35,23 @@ type NotifyOptions struct {
 	MessageType string
 	// Mentions will be merged with mentions parsed from botID.
 	Mentions []string
+
+	// Common rich notification fields. Providers may ignore unsupported fields.
+	Title      string
+	Subtitle   string
+	URL        string
+	Group      string
+	Sound      string
+	Icon       string
+	Level      string
+	Volume     string
+	Copy       string
+	Action     string
+	Ciphertext string
+	Badge      *int
+	Call       bool
+	AutoCopy   bool
+	IsArchive  bool
 }
 
 type NotifyOption func(*NotifyOptions)
@@ -47,6 +65,96 @@ func WithMessageType(messageType string) NotifyOption {
 func WithMentions(mentions ...string) NotifyOption {
 	return func(o *NotifyOptions) {
 		o.Mentions = append(o.Mentions, mentions...)
+	}
+}
+
+func WithTitle(title string) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.Title = title
+	}
+}
+
+func WithSubtitle(subtitle string) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.Subtitle = subtitle
+	}
+}
+
+func WithURL(targetURL string) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.URL = strings.TrimSpace(targetURL)
+	}
+}
+
+func WithGroup(group string) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.Group = strings.TrimSpace(group)
+	}
+}
+
+func WithSound(sound string) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.Sound = strings.TrimSpace(sound)
+	}
+}
+
+func WithIcon(icon string) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.Icon = strings.TrimSpace(icon)
+	}
+}
+
+func WithLevel(level string) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.Level = strings.TrimSpace(level)
+	}
+}
+
+func WithVolume(volume string) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.Volume = strings.TrimSpace(volume)
+	}
+}
+
+func WithCopy(copy string) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.Copy = copy
+	}
+}
+
+func WithAction(action string) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.Action = strings.TrimSpace(action)
+	}
+}
+
+func WithCiphertext(ciphertext string) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.Ciphertext = ciphertext
+	}
+}
+
+func WithBadge(badge int) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.Badge = &badge
+	}
+}
+
+func WithCall(enabled bool) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.Call = enabled
+	}
+}
+
+func WithAutoCopy(enabled bool) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.AutoCopy = enabled
+	}
+}
+
+func WithArchive(enabled bool) NotifyOption {
+	return func(o *NotifyOptions) {
+		o.IsArchive = enabled
 	}
 }
 
@@ -82,6 +190,10 @@ func getProvider(scheme string) (Sender, bool) {
 // - lark://{bot_id}
 // - lark://{bot_id}@{mention1,mention2}
 // - wework://{bot_id}
+// - bark://{device_key}
+// - bark://{device_key1,device_key2}
+// - bark://{host}/{device_key}
+// - bark://{host}/{device_key1,device_key2}
 // Query string `?mention=` is also supported and merged with the @ suffix.
 func Notify(ctx context.Context, botID, message string) error {
 	return NotifyWithOptions(ctx, botID, message)
