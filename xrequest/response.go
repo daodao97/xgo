@@ -248,30 +248,45 @@ func flushResponseWriter(w http.ResponseWriter) {
 	}
 }
 
+func setFirstError(firstErr *error, err error) {
+	if err != nil && *firstErr == nil {
+		*firstErr = err
+	}
+}
+
 func writeSSEStreamV2(w http.ResponseWriter, reader io.Reader, hooks []ResponseHook) (int64, error) {
 	bufReader := bufio.NewReader(reader)
 	totalBytes := int64(0)
+	var firstWriteErr error
+	canWrite := true
 
 	for {
 		line, err := bufReader.ReadBytes('\n')
 		if err != nil && err != io.EOF {
+			if firstWriteErr != nil {
+				return totalBytes, fmt.Errorf("error streaming response after write failure: %w (first write error: %v)", err, firstWriteErr)
+			}
 			return totalBytes, fmt.Errorf("error streaming response: %w", err)
 		}
 
 		if len(line) == 0 {
-			return totalBytes, nil
+			return totalBytes, firstWriteErr
 		}
 
 		content, newline := splitLineSuffix(line)
 		if len(content) == 0 {
-			n, writeErr := w.Write(line)
-			if writeErr != nil {
-				return totalBytes, fmt.Errorf("error writing response: %w", writeErr)
+			if canWrite {
+				n, writeErr := w.Write(line)
+				if writeErr != nil {
+					setFirstError(&firstWriteErr, fmt.Errorf("error writing response: %w", writeErr))
+					canWrite = false
+				} else {
+					totalBytes += int64(n)
+					flushResponseWriter(w)
+				}
 			}
-			totalBytes += int64(n)
-			flushResponseWriter(w)
 			if err == io.EOF {
-				return totalBytes, nil
+				return totalBytes, firstWriteErr
 			}
 			continue
 		}
@@ -280,18 +295,20 @@ func writeSSEStreamV2(w http.ResponseWriter, reader io.Reader, hooks []ResponseH
 			if len(newline) > 0 {
 				processed = append(processed, newline...)
 			}
-			if len(processed) > 0 {
+			if len(processed) > 0 && canWrite {
 				n, writeErr := w.Write(processed)
 				if writeErr != nil {
-					return totalBytes, fmt.Errorf("error writing response: %w", writeErr)
+					setFirstError(&firstWriteErr, fmt.Errorf("error writing response: %w", writeErr))
+					canWrite = false
+				} else {
+					totalBytes += int64(n)
+					flushResponseWriter(w)
 				}
-				totalBytes += int64(n)
 			}
-			flushResponseWriter(w)
 		}
 
 		if err == io.EOF {
-			return totalBytes, nil
+			return totalBytes, firstWriteErr
 		}
 	}
 }
@@ -299,6 +316,8 @@ func writeSSEStreamV2(w http.ResponseWriter, reader io.Reader, hooks []ResponseH
 func writeChunkStreamV2(w http.ResponseWriter, reader io.Reader, hooks []ResponseHook) (int64, error) {
 	buf := make([]byte, 32*1024)
 	totalBytes := int64(0)
+	var firstWriteErr error
+	canWrite := true
 
 	for {
 		n, err := reader.Read(buf)
@@ -309,24 +328,31 @@ func writeChunkStreamV2(w http.ResponseWriter, reader io.Reader, hooks []Respons
 				flush, processed := applyResponseHooks(hooks, chunk)
 				if !flush || len(processed) == 0 {
 					if err == io.EOF {
-						return totalBytes, nil
+						return totalBytes, firstWriteErr
 					}
 					continue
 				}
 				chunk = processed
 			}
 
-			written, writeErr := w.Write(chunk)
-			if writeErr != nil {
-				return totalBytes, fmt.Errorf("error writing response: %w", writeErr)
+			if canWrite {
+				written, writeErr := w.Write(chunk)
+				if writeErr != nil {
+					setFirstError(&firstWriteErr, fmt.Errorf("error writing response: %w", writeErr))
+					canWrite = false
+				} else {
+					totalBytes += int64(written)
+					flushResponseWriter(w)
+				}
 			}
-			totalBytes += int64(written)
-			flushResponseWriter(w)
 		}
 
 		if err != nil {
 			if err == io.EOF {
-				return totalBytes, nil
+				return totalBytes, firstWriteErr
+			}
+			if firstWriteErr != nil {
+				return totalBytes, fmt.Errorf("error streaming response after write failure: %w (first write error: %v)", err, firstWriteErr)
 			}
 			return totalBytes, fmt.Errorf("error streaming response: %w", err)
 		}
@@ -400,10 +426,15 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 		writeHeaders()
 
 		totalBytes := int64(0)
+		var firstWriteErr error
+		canWrite := true
 		for {
 			line, err := reader.ReadBytes('\n')
 			if err != nil {
 				if err != io.EOF {
+					if firstWriteErr != nil {
+						return totalBytes, fmt.Errorf("error streaming response after write failure: %w (first write error: %v)", err, firstWriteErr)
+					}
 					return totalBytes, fmt.Errorf("error streaming response: %w", err)
 				}
 				if len(line) > 0 {
@@ -412,15 +443,17 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 					for _, f := range hooks {
 						flush, processedLine = f(processedLine)
 					}
-					if flush {
+					if flush && canWrite {
 						n, writeErr := w.Write(processedLine)
 						if writeErr != nil {
-							return totalBytes, fmt.Errorf("error writing final line: %w", writeErr)
+							setFirstError(&firstWriteErr, fmt.Errorf("error writing final line: %w", writeErr))
+							canWrite = false
+						} else {
+							totalBytes += int64(n)
 						}
-						totalBytes += int64(n)
 					}
 				}
-				return totalBytes, nil
+				return totalBytes, firstWriteErr
 			}
 
 			originalLine := make([]byte, len(line))
@@ -429,11 +462,15 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 			trimmedLine := bytes.TrimRight(line, "\n")
 
 			if len(trimmedLine) == 0 {
-				n, writeErr := w.Write(originalLine)
-				if writeErr != nil {
-					return totalBytes, fmt.Errorf("error writing response: %w", writeErr)
+				if canWrite {
+					n, writeErr := w.Write(originalLine)
+					if writeErr != nil {
+						setFirstError(&firstWriteErr, fmt.Errorf("error writing response: %w", writeErr))
+						canWrite = false
+					} else {
+						totalBytes += int64(n)
+					}
 				}
-				totalBytes += int64(n)
 			} else {
 				flush := true
 				processedLine := trimmedLine
@@ -448,15 +485,19 @@ func (r *Response) ToHttpResponseWriter(w http.ResponseWriter, hooks ...Response
 					processedLine = append(processedLine, '\n')
 				}
 
-				n, writeErr := w.Write(processedLine)
-				if writeErr != nil {
-					return totalBytes, fmt.Errorf("error writing response: %w", writeErr)
+				if canWrite {
+					n, writeErr := w.Write(processedLine)
+					if writeErr != nil {
+						setFirstError(&firstWriteErr, fmt.Errorf("error writing response: %w", writeErr))
+						canWrite = false
+					} else {
+						totalBytes += int64(n)
+					}
 				}
-				totalBytes += int64(n)
 			}
 
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
+			if canWrite {
+				flushResponseWriter(w)
 			}
 		}
 	}

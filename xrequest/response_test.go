@@ -2,6 +2,7 @@ package xrequest
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -99,4 +100,109 @@ func TestToHttpResponseWriteV2_NonStreamFlushFalse(t *testing.T) {
 	if got := rec.Header().Get("Content-Length"); got != "0" {
 		t.Fatalf("content-length mismatch: got %q want %q", got, "0")
 	}
+}
+
+type failingResponseWriter struct {
+	header          http.Header
+	body            bytes.Buffer
+	statusCode      int
+	writeCount      int
+	failAfterWrites int
+}
+
+func newFailingResponseWriter(failAfterWrites int) *failingResponseWriter {
+	return &failingResponseWriter{
+		header:          make(http.Header),
+		failAfterWrites: failAfterWrites,
+	}
+}
+
+func (w *failingResponseWriter) Header() http.Header {
+	return w.header
+}
+
+func (w *failingResponseWriter) Write(data []byte) (int, error) {
+	w.writeCount++
+	if w.writeCount > w.failAfterWrites {
+		return 0, errors.New("forced write failure")
+	}
+	return w.body.Write(data)
+}
+
+func (w *failingResponseWriter) WriteHeader(statusCode int) {
+	w.statusCode = statusCode
+}
+
+func (w *failingResponseWriter) Flush() {}
+
+func TestToHttpResponseWriter_DrainsSSEAfterWriteFailure(t *testing.T) {
+	body := "data: one\n\ndata: two\n\n"
+	rawResp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Content-Type": []string{"text/event-stream"},
+		},
+		Body: io.NopCloser(strings.NewReader(body)),
+	}
+	resp := NewResponse(rawResp)
+
+	var seen []string
+	hook := func(data []byte) (bool, []byte) {
+		seen = append(seen, string(data))
+		return true, data
+	}
+
+	writer := newFailingResponseWriter(1)
+	written, err := resp.ToHttpResponseWriter(writer, hook)
+	if err == nil || !strings.Contains(err.Error(), "forced write failure") {
+		t.Fatalf("expected forced write failure, got %v", err)
+	}
+	if got, want := seen, []string{"data: one", "data: two"}; !stringSlicesEqual(got, want) {
+		t.Fatalf("hook calls mismatch: got %#v want %#v", got, want)
+	}
+	if got, want := written, int64(len("data: one\n")); got != want {
+		t.Fatalf("written mismatch: got %d want %d", got, want)
+	}
+}
+
+func TestToHttpResponseWriteV2_DrainsSSEAfterWriteFailure(t *testing.T) {
+	body := "data: one\n\ndata: two\n\n"
+	rawResp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Content-Type": []string{"text/event-stream"},
+		},
+		Body: io.NopCloser(strings.NewReader(body)),
+	}
+	resp := NewResponse(rawResp)
+
+	var seen []string
+	hook := func(data []byte) (bool, []byte) {
+		seen = append(seen, string(data))
+		return true, data
+	}
+
+	writer := newFailingResponseWriter(1)
+	written, err := resp.ToHttpResponseWriteV2(writer, hook)
+	if err == nil || !strings.Contains(err.Error(), "forced write failure") {
+		t.Fatalf("expected forced write failure, got %v", err)
+	}
+	if got, want := seen, []string{"data: one", "data: two"}; !stringSlicesEqual(got, want) {
+		t.Fatalf("hook calls mismatch: got %#v want %#v", got, want)
+	}
+	if got, want := written, int64(len("data: one\n")); got != want {
+		t.Fatalf("written mismatch: got %d want %d", got, want)
+	}
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
