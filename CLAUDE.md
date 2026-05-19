@@ -79,6 +79,22 @@ The repository structure:
 - Trace ID integration via `xtrace`
 - Helper functions: `xlog.Debug()`, `xlog.Info()`, `xlog.Warn()`, `xlog.Error()`
 - Attribute helpers: `xlog.Any()`, `xlog.Err()`
+- Context attr extractors: `xlog.RegisterCtxExtractor(func(ctx) []slog.Attr)` lets user projects auto-inject attrs from `ctx` into any `XxxCtx` log call. Built-in defaults handle `request_id` (string ctx key) and `traceid` (via `xtrace.FromTraceId`). Typical usage:
+
+  ```go
+  func init() {
+      xlog.RegisterCtxExtractor(func(ctx context.Context) []slog.Attr {
+          u, ok := auth.UserFromContext(ctx)
+          if !ok { return nil }
+          return []slog.Attr{
+              xlog.String("user_id", u.ID),
+              xlog.String("tenant", u.Tenant),
+          }
+      })
+  }
+  ```
+
+  Registration is lock-free (`atomic.Pointer` copy-on-write); safe to call from `init()` or at runtime.
 
 ### Database Layer (xdb)
 - Model-based ORM with chainable query builder
