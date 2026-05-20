@@ -2,6 +2,7 @@ package xrequest
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/daodao97/xgo/xjson"
+	"github.com/daodao97/xgo/xtrace"
 )
 
 type flushRecorder struct {
@@ -117,6 +119,56 @@ func TestRequestWithReqHook(t *testing.T) {
 	}
 	t.Log(resp.StatusCode())
 	t.Log(resp.Json())
+}
+
+func TestRequestPropagatesTraceIDFromContext(t *testing.T) {
+	const traceID = "trace-from-context"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get(xtrace.DefaultTraceIdHeader); got != traceID {
+			t.Fatalf("unexpected trace id header, expected %q got %q", traceID, got)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	ctx := xtrace.SetTraceId(context.Background(), traceID)
+	resp, err := New().
+		WithContext(ctx).
+		SetClient(server.Client()).
+		Get(server.URL)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("unexpected status code, expected 200 got %d", resp.StatusCode())
+	}
+}
+
+func TestRequestKeepsExplicitTraceIDHeader(t *testing.T) {
+	const ctxTraceID = "trace-from-context"
+	const headerTraceID = "trace-from-header"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get(xtrace.DefaultTraceIdHeader); got != headerTraceID {
+			t.Fatalf("unexpected trace id header, expected %q got %q", headerTraceID, got)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	ctx := xtrace.SetTraceId(context.Background(), ctxTraceID)
+	resp, err := New().
+		WithContext(ctx).
+		SetClient(server.Client()).
+		SetHeader(xtrace.DefaultTraceIdHeader, headerTraceID).
+		Get(server.URL)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("unexpected status code, expected 200 got %d", resp.StatusCode())
+	}
 }
 
 func TestRequestSSE(t *testing.T) {
