@@ -10,6 +10,9 @@ import (
 // Key to use when setting the trace id.
 type ctxTraceIdKey struct{}
 
+// DefaultTraceIdHeader is the default HTTP header used to propagate trace ids.
+const DefaultTraceIdHeader = "X-Trace-Id"
+
 // Config defines the config for TraceId middleware
 type Config struct {
 	traceIdHeader string
@@ -40,7 +43,7 @@ func WithNextTraceId(f func() string) Option {
 //   - nextTraceID generates the next trace id.(default NewSequence function use utilities/sequence)
 func TraceId(opts ...Option) gin.HandlerFunc {
 	cc := &Config{
-		traceIdHeader: "X-Trace-Id",
+		traceIdHeader: DefaultTraceIdHeader,
 		nextTraceID: func() string {
 			return uuid.NewString()
 		},

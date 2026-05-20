@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/daodao97/xgo/xlog"
+	"github.com/daodao97/xgo/xtrace"
 )
 
 var RequestDebug = false
@@ -383,6 +384,7 @@ func (r *Request) makeRequest(ctx context.Context) (*http.Request, error) {
 		} else {
 			newReq.URL = _url
 		}
+		addTraceIDHeader(ctx, newReq)
 
 		return newReq, nil
 	}
@@ -422,6 +424,7 @@ func (r *Request) makeRequest(ctx context.Context) (*http.Request, error) {
 		// req.Header[formatHeaderKey(k)] = []string{v}
 		req.Header[k] = []string{v}
 	}
+	addTraceIDHeader(ctx, req)
 
 	for k, v := range r.cookies {
 		req.AddCookie(&http.Cookie{Name: k, Value: v})
@@ -438,6 +441,20 @@ func (r *Request) makeRequest(ctx context.Context) (*http.Request, error) {
 	}
 
 	return req, nil
+}
+
+func addTraceIDHeader(ctx context.Context, req *http.Request) {
+	if req == nil || req.Header.Get(xtrace.DefaultTraceIdHeader) != "" {
+		return
+	}
+	traceID := xtrace.FromTraceId(ctx)
+	if traceID == "" {
+		return
+	}
+	if req.Header == nil {
+		req.Header = make(http.Header)
+	}
+	req.Header.Set(xtrace.DefaultTraceIdHeader, traceID)
 }
 
 func (r *Request) prepareBody() (io.Reader, error) {
