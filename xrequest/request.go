@@ -311,12 +311,12 @@ func (r *Request) do() (*Response, error) {
 	start := time.Now()
 	resp, err := client.Do(req)
 
-	duration := time.Since(start)
+	duration := time.Since(start).Milliseconds()
 	logFunc := xlog.DebugCtx
 	args := []any{
 		xlog.String("url", r.targetUrl),
 		xlog.String("method", r.method),
-		xlog.Duration("duration", duration),
+		xlog.Int64("duration", duration),
 	}
 
 	_ = _curlString
