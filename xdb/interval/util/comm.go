@@ -1,8 +1,8 @@
 package util
 
 import (
+	"github.com/muhammadmuzzammil1998/jsonc"
 	"github.com/pkg/errors"
-	"muzzammil.xyz/jsonc"
 )
 
 func JsonStrRemoveComments(str string) (string, error) {

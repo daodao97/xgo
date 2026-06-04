@@ -13,9 +13,9 @@ import (
 	"github.com/daodao97/xgo/xjwt"
 	"github.com/daodao97/xgo/xlog"
 
+	"github.com/muhammadmuzzammil1998/jsonc"
 	"github.com/tidwall/gjson"
 	"golang.org/x/crypto/bcrypt"
-	"muzzammil.xyz/jsonc"
 )
 
 var operatorTable = "operator"

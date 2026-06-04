@@ -5,10 +5,10 @@ import (
 	"os"
 
 	"github.com/daodao97/xgo/utils"
+	"github.com/daodao97/xgo/xapp"
 	"github.com/daodao97/xgo/xdb"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/daodao97/xgo/xconf"
 	"github.com/daodao97/xgo/xlog"
 )
 
@@ -37,7 +37,7 @@ func InitConf() error {
 		JwtSecret:  "hsxtypr",
 	}
 
-	if err := xconf.Init("./conf.yaml", &_c); err != nil {
+	if err := xapp.InitConf(_c); err != nil {
 		return nil
 	}
 

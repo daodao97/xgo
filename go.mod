@@ -20,6 +20,7 @@ require (
 	github.com/gorilla/schema v1.4.1
 	github.com/json-iterator/go v1.1.12
 	github.com/mitchellh/mapstructure v1.5.0
+	github.com/muhammadmuzzammil1998/jsonc v1.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.19.1
 	github.com/redis/go-redis/v9 v9.0.0
@@ -31,7 +32,6 @@ require (
 	github.com/tidwall/sjson v1.2.5
 	golang.org/x/crypto v0.23.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
-	muzzammil.xyz/jsonc v1.0.0
 )
 
 require (
