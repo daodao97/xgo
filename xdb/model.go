@@ -166,8 +166,9 @@ func (m *model) Tx(tx *sql.Tx) Model {
 }
 
 func (m *model) Ctx(ctx context.Context) Model {
-	m.ctx = ctx
-	return m
+	newM := *m
+	newM.ctx = ctx
+	return &newM
 }
 
 func (m *model) PrimaryKey() string {
