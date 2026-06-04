@@ -144,10 +144,15 @@ affected, err := m.InsertOrUpdate(xdb.Record{
 
 ```go
 // 所有数据库统一 API
-lastId, err := m.InsertIgnore(xdb.Record{
+// 返回受影响行数：1 表示插入成功，0 表示因唯一键冲突被忽略。
+// 用 RowsAffected 而非 LastInsertId，主键非自增（如应用生成的 xid）时也能正确判定。
+affected, err := m.InsertIgnore(xdb.Record{
     "id":   1,
     "name": "Alice",
 })
+if affected > 0 {
+    // 新插入
+}
 
 // MySQL 生成:
 // INSERT IGNORE INTO users (id, name) VALUES (?, ?)
