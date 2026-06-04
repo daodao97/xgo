@@ -26,7 +26,10 @@ type Model interface {
 	Inserts(records []Record) (lastId int64, err error)
 	Update(record Record, opt ...Option) (ok bool, err error)
 	InsertOrUpdate(record Record, updateFields ...string) (affected int64, err error)
-	InsertIgnore(record Record) (lastId int64, err error)
+	// InsertIgnore 插入一条记录，若与唯一键冲突则忽略。
+	// 返回受影响行数：1 表示插入成功，0 表示因冲突被忽略。
+	// 用 RowsAffected 而非 LastInsertId，以便在主键非自增（如应用生成的 xid）时也能正确判定。
+	InsertIgnore(record Record) (affected int64, err error)
 	Delete(opt ...Option) (ok bool, err error)
 	Exec(query string, args ...any) (sql.Result, error)
 	Query(query string, args ...any) (*sql.Rows, error)
@@ -701,13 +704,13 @@ func (m *model) InsertOrUpdate(record Record, updateFields ...string) (affected 
 	return affected, nil
 }
 
-func (m *model) InsertIgnore(record Record) (lastId int64, err error) {
+func (m *model) InsertIgnore(record Record) (affected int64, err error) {
 	if m.err != nil {
 		return 0, m.err
 	}
 
 	var kv []any
-	defer dbLog(m.ctx, "InsertOrUpdate", time.Now(), &err, &kv)
+	defer dbLog(m.ctx, "InsertIgnore", time.Now(), &err, &kv)
 
 	if len(record) == 0 {
 		return 0, errors.New("空记录无法插入")
@@ -748,7 +751,7 @@ func (m *model) InsertIgnore(record Record) (lastId int64, err error) {
 		return 0, err
 	}
 
-	affected, err := result.LastInsertId()
+	affected, err = result.RowsAffected()
 	if err != nil {
 		return 0, err
 	}
