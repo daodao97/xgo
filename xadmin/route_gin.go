@@ -97,7 +97,8 @@ func authMiddleware() gin.HandlerFunc {
 func isPublicUserAPI(path string) bool {
 	switch path {
 	case fmt.Sprintf("%sapi/user/login", adminPath),
-		fmt.Sprintf("%sapi/user/email/code", adminPath):
+		fmt.Sprintf("%sapi/user/email/code", adminPath),
+		fmt.Sprintf("%sapi/user/email/code/status", adminPath):
 		return true
 	default:
 		return false

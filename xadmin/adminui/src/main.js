@@ -3,6 +3,7 @@ import './style.css'
 import '@okiss/oms/style.css'
 import { defineAsyncComponent } from 'vue'
 import app from './app'
+import { setupLoginEmailCode } from './login-email-code'
 
 // register dashboard
 setCmp('dashboard', defineAsyncComponent(() => import('./views/dashboard/index.vue')))
@@ -33,3 +34,4 @@ const options = {
 }
 
 createAdmin(options)
+setupLoginEmailCode()

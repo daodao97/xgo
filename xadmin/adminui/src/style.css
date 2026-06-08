@@ -5,3 +5,30 @@
 .el-transfer-panel {
     --el-transfer-panel-width: auto;
 }
+
+#login #form .email-code {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 10px 0;
+}
+
+#login #form .email-code .input-email-code {
+    width: 170px;
+    height: 40px;
+    margin-right: 10px;
+    padding: 10px;
+}
+
+#login #form .email-code .email-code-button {
+    width: 120px;
+    height: 40px;
+}
+
+#login #form .email-code-tips {
+    padding: 6px 0;
+    color: gray;
+    font-size: 13px;
+    text-align: left;
+}

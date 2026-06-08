@@ -20,6 +20,13 @@ type testAPIResp struct {
 	Data    map[string]string `json:"data"`
 }
 
+type emailCodeStatusResp struct {
+	Code int `json:"code"`
+	Data struct {
+		Enabled bool `json:"enabled"`
+	} `json:"data"`
+}
+
 func resetEmailCodeTest(t *testing.T) {
 	t.Helper()
 
@@ -48,6 +55,34 @@ func postJSON(handler http.HandlerFunc, body string) testAPIResp {
 	var resp testAPIResp
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	return resp
+}
+
+func getEmailCodeStatus() emailCodeStatusResp {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	emailCodeStatusHandler(w, req)
+
+	var resp emailCodeStatusResp
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	return resp
+}
+
+func TestEmailCodeStatusReflectsSenderRegistration(t *testing.T) {
+	resetEmailCodeTest(t)
+
+	resp := getEmailCodeStatus()
+	require.Equal(t, 0, resp.Code)
+	assert.False(t, resp.Data.Enabled)
+
+	SetLoginEmailCode(&LoginEmailCodeConf{
+		Sender: func(ctx context.Context, to, code string) error {
+			return nil
+		},
+	})
+
+	resp = getEmailCodeStatus()
+	require.Equal(t, 0, resp.Code)
+	assert.True(t, resp.Data.Enabled)
 }
 
 func TestEmailSuffixValidation(t *testing.T) {

@@ -151,6 +151,15 @@ func emailCodeHandler(w http.ResponseWriter, r *http.Request) {
 	xhttp.ResponseJson(w, Map{"code": 0})
 }
 
+func emailCodeStatusHandler(w http.ResponseWriter, r *http.Request) {
+	xhttp.ResponseJson(w, Map{
+		"code": 0,
+		"data": Map{
+			"enabled": loginEmailCodeEnabled(getLoginEmailCodeConf()),
+		},
+	})
+}
+
 func resolveEmailCodeTarget(req *emailCodeRequest) (string, error) {
 	username := strings.TrimSpace(req.Username)
 	if username != "" {
