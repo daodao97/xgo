@@ -50,8 +50,10 @@ func SetWebSite(data map[string]any) {
 }
 
 type User struct {
-	Username string
-	Password string
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	Code      string `json:"code"`
+	EmailCode string `json:"email_code"`
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -85,6 +87,14 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		xhttp.ResponseJson(w, Map{
 			"code":    4002,
 			"message": "用户名或密码错误",
+		})
+		return
+	}
+
+	if err := validateLoginEmailCode(row, loginEmailCodeFromUser(user)); err != nil {
+		xhttp.ResponseJson(w, Map{
+			"code":    emailCodeErrorCode(err),
+			"message": err.Error(),
 		})
 		return
 	}

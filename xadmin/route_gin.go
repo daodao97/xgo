@@ -51,7 +51,7 @@ func GinRoute(r *gin.Engine) *gin.RouterGroup {
 
 func authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.Request.URL.Path == fmt.Sprintf("%sapi/user/login", adminPath) {
+		if isPublicUserAPI(c.Request.URL.Path) {
 			c.Next()
 			return
 		}
@@ -91,6 +91,17 @@ func authMiddleware() gin.HandlerFunc {
 		c.Set("user", payload)
 
 		c.Next()
+	}
+}
+
+func isPublicUserAPI(path string) bool {
+	switch path {
+	case fmt.Sprintf("%sapi/user/login", adminPath),
+		fmt.Sprintf("%sapi/user/email/code", adminPath),
+		fmt.Sprintf("%sapi/user/email/code/status", adminPath):
+		return true
+	default:
+		return false
 	}
 }
 
