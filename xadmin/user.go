@@ -91,7 +91,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := validateLoginEmailCode(row, loginEmailCodeFromUser(user)); err != nil {
+	if err := validateLoginEmailCode(r.Context(), row, loginEmailCodeFromUser(user)); err != nil {
 		xhttp.ResponseJson(w, Map{
 			"code":    emailCodeErrorCode(err),
 			"message": err.Error(),

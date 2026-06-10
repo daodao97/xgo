@@ -21,12 +21,20 @@ var (
 	errEmailCodeDisabled      = errors.New("email verification code is disabled")
 	errEmailSuffixNotAllowed  = errors.New("email suffix is not allowed")
 	errEmailCodeInvalid       = errors.New("email verification code is invalid")
+	errEmailCodeStoreFailed   = errors.New("email verification code store failed")
 	errUserEmailRequired      = errors.New("user email is required")
 	errEmailCodeTargetMissing = errors.New("username or email is required")
 )
 
 // EmailCodeSender sends a generated verification code to the target email.
 type EmailCodeSender func(ctx context.Context, to, code string) error
+
+// EmailCodeStore stores login email verification codes.
+type EmailCodeStore interface {
+	RemainingCooldown(ctx context.Context, email string, interval time.Duration, now time.Time) (time.Duration, error)
+	Save(ctx context.Context, email, code string, codeExpire, sendInterval time.Duration, now time.Time) error
+	Consume(ctx context.Context, email, code string, now time.Time) (bool, error)
+}
 
 type LoginEmailCodeConf struct {
 	AllowedSuffixes []string
@@ -55,7 +63,8 @@ type emailCodeMemoryStore struct {
 var (
 	loginEmailCodeMu   sync.RWMutex
 	loginEmailCodeConf *LoginEmailCodeConf
-	emailCodes         = newEmailCodeMemoryStore()
+	emailCodeStoreMu   sync.RWMutex
+	emailCodes         EmailCodeStore = newEmailCodeMemoryStore()
 )
 
 func SetLoginEmailCode(conf *LoginEmailCodeConf) {
@@ -66,6 +75,15 @@ func SetLoginEmailCode(conf *LoginEmailCodeConf) {
 
 func SetLoginEmailCodeSender(sender EmailCodeSender) {
 	SetLoginEmailCode(&LoginEmailCodeConf{Sender: sender})
+}
+
+func SetLoginEmailCodeStore(store EmailCodeStore) {
+	emailCodeStoreMu.Lock()
+	defer emailCodeStoreMu.Unlock()
+	if store == nil {
+		store = newEmailCodeMemoryStore()
+	}
+	emailCodes = store
 }
 
 func newEmailCodeMemoryStore() *emailCodeMemoryStore {
@@ -103,6 +121,12 @@ func getLoginEmailCodeConf() *LoginEmailCodeConf {
 	return &copied
 }
 
+func getLoginEmailCodeStore() EmailCodeStore {
+	emailCodeStoreMu.RLock()
+	defer emailCodeStoreMu.RUnlock()
+	return emailCodes
+}
+
 func loginEmailCodeEnabled(conf *LoginEmailCodeConf) bool {
 	return conf != nil && conf.Sender != nil
 }
@@ -130,7 +154,14 @@ func emailCodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if remaining := emailCodes.remainingCooldown(email, conf.SendInterval, time.Now()); remaining > 0 {
+	now := time.Now()
+	store := getLoginEmailCodeStore()
+	remaining, err := store.RemainingCooldown(r.Context(), email, conf.SendInterval, now)
+	if err != nil {
+		emailCodeResponseError(w, 500, err.Error())
+		return
+	}
+	if remaining > 0 {
 		emailCodeResponseError(w, 4005, fmt.Sprintf("please retry after %d seconds", int(remaining.Seconds())+1))
 		return
 	}
@@ -146,8 +177,10 @@ func emailCodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	now := time.Now()
-	emailCodes.save(email, code, now.Add(conf.CodeExpire), now)
+	if err := store.Save(r.Context(), email, code, conf.CodeExpire, conf.SendInterval, now); err != nil {
+		emailCodeResponseError(w, 500, err.Error())
+		return
+	}
 	xhttp.ResponseJson(w, Map{"code": 0})
 }
 
@@ -180,7 +213,7 @@ func resolveEmailCodeTarget(req *emailCodeRequest) (string, error) {
 	return normalizeEmailAddress(email)
 }
 
-func validateLoginEmailCode(row xdb.Record, code string) error {
+func validateLoginEmailCode(ctx context.Context, row xdb.Record, code string) error {
 	conf := getLoginEmailCodeConf()
 	if !loginEmailCodeEnabled(conf) {
 		return nil
@@ -193,7 +226,11 @@ func validateLoginEmailCode(row xdb.Record, code string) error {
 	if !emailAllowedBySuffix(email, conf.AllowedSuffixes) {
 		return errEmailSuffixNotAllowed
 	}
-	if !emailCodes.consume(email, strings.TrimSpace(code), time.Now()) {
+	ok, err := getLoginEmailCodeStore().Consume(ctx, email, strings.TrimSpace(code), time.Now())
+	if err != nil {
+		return fmt.Errorf("%w: %v", errEmailCodeStoreFailed, err)
+	}
+	if !ok {
 		return errEmailCodeInvalid
 	}
 	return nil
@@ -225,6 +262,8 @@ func emailCodeErrorCode(err error) int {
 		return 4007
 	case errors.Is(err, errEmailCodeInvalid):
 		return 4006
+	case errors.Is(err, errEmailCodeStoreFailed):
+		return 500
 	default:
 		return 400
 	}
@@ -304,51 +343,52 @@ func generateEmailCode(length int) (string, error) {
 	return b.String(), nil
 }
 
-func (s *emailCodeMemoryStore) remainingCooldown(email string, interval time.Duration, now time.Time) time.Duration {
+func (s *emailCodeMemoryStore) RemainingCooldown(ctx context.Context, email string, interval time.Duration, now time.Time) (time.Duration, error) {
 	if interval <= 0 {
-		return 0
+		return 0, nil
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	entry, ok := s.codes[email]
 	if !ok {
-		return 0
+		return 0, nil
 	}
 
 	remaining := entry.SentAt.Add(interval).Sub(now)
 	if remaining <= 0 {
-		return 0
+		return 0, nil
 	}
-	return remaining
+	return remaining, nil
 }
 
-func (s *emailCodeMemoryStore) save(email, code string, expireAt, sentAt time.Time) {
+func (s *emailCodeMemoryStore) Save(ctx context.Context, email, code string, codeExpire, sendInterval time.Duration, now time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.codes[email] = emailCodeEntry{
 		Code:     code,
-		ExpireAt: expireAt,
-		SentAt:   sentAt,
+		ExpireAt: now.Add(codeExpire),
+		SentAt:   now,
 	}
+	return nil
 }
 
-func (s *emailCodeMemoryStore) consume(email, code string, now time.Time) bool {
+func (s *emailCodeMemoryStore) Consume(ctx context.Context, email, code string, now time.Time) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	entry, ok := s.codes[email]
 	if !ok {
-		return false
+		return false, nil
 	}
 	if now.After(entry.ExpireAt) {
 		delete(s.codes, email)
-		return false
+		return false, nil
 	}
 	if subtle.ConstantTimeCompare([]byte(entry.Code), []byte(code)) != 1 {
-		return false
+		return false, nil
 	}
 
 	delete(s.codes, email)
-	return true
+	return true, nil
 }

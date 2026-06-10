@@ -27,6 +27,16 @@ type emailCodeStatusResp struct {
 	} `json:"data"`
 }
 
+type emailCodeSpyStore struct {
+	*emailCodeMemoryStore
+	saveCount int
+}
+
+func (s *emailCodeSpyStore) Save(ctx context.Context, email, code string, codeExpire, sendInterval time.Duration, now time.Time) error {
+	s.saveCount++
+	return s.emailCodeMemoryStore.Save(ctx, email, code, codeExpire, sendInterval, now)
+}
+
 func resetEmailCodeTest(t *testing.T) {
 	t.Helper()
 
@@ -36,13 +46,13 @@ func resetEmailCodeTest(t *testing.T) {
 	loginEmailCodeMu.Lock()
 	loginEmailCodeConf = nil
 	loginEmailCodeMu.Unlock()
-	emailCodes = newEmailCodeMemoryStore()
+	SetLoginEmailCodeStore(newEmailCodeMemoryStore())
 
 	t.Cleanup(func() {
 		loginEmailCodeMu.Lock()
 		loginEmailCodeConf = oldLoginEmailCodeConf
 		loginEmailCodeMu.Unlock()
-		emailCodes = oldEmailCodes
+		SetLoginEmailCodeStore(oldEmailCodes)
 	})
 }
 
@@ -142,15 +152,35 @@ func TestEmailCodeHandlerUsesInjectedSenderAndEnforcesCooldown(t *testing.T) {
 	assert.Equal(t, errEmailCodeDisabled.Error(), resp.Message)
 }
 
+func TestSetLoginEmailCodeStoreUsesRegisteredStore(t *testing.T) {
+	resetEmailCodeTest(t)
+
+	store := &emailCodeSpyStore{emailCodeMemoryStore: newEmailCodeMemoryStore()}
+	SetLoginEmailCodeStore(store)
+	SetLoginEmailCode(&LoginEmailCodeConf{
+		Sender: func(ctx context.Context, to, code string) error {
+			return nil
+		},
+	})
+
+	resp := postJSON(emailCodeHandler, `{"email":"user@example.com"}`)
+	require.Equal(t, 0, resp.Code)
+	assert.Equal(t, 1, store.saveCount)
+
+	SetLoginEmailCodeStore(nil)
+	_, ok := getLoginEmailCodeStore().(*emailCodeMemoryStore)
+	assert.True(t, ok)
+}
+
 func TestLoginEmailCodeOptionalWithoutSender(t *testing.T) {
 	resetEmailCodeTest(t)
 
-	assert.NoError(t, validateLoginEmailCode(xdb.Record{}, ""))
+	assert.NoError(t, validateLoginEmailCode(context.Background(), xdb.Record{}, ""))
 
 	SetLoginEmailCode(&LoginEmailCodeConf{
 		AllowedSuffixes: []string{"@example.com"},
 	})
-	assert.NoError(t, validateLoginEmailCode(xdb.Record{}, ""))
+	assert.NoError(t, validateLoginEmailCode(context.Background(), xdb.Record{}, ""))
 }
 
 func TestLoginEmailCodeRequiredWhenSenderRegistered(t *testing.T) {
@@ -164,18 +194,18 @@ func TestLoginEmailCodeRequiredWhenSenderRegistered(t *testing.T) {
 	})
 
 	row := xdb.Record{"email": "USER@Example.COM"}
-	emailCodes.save("user@example.com", "123456", time.Now().Add(time.Minute), time.Now())
+	require.NoError(t, getLoginEmailCodeStore().Save(context.Background(), "user@example.com", "123456", time.Minute, time.Minute, time.Now()))
 
-	err := validateLoginEmailCode(row, "")
+	err := validateLoginEmailCode(context.Background(), row, "")
 	require.ErrorIs(t, err, errEmailCodeInvalid)
 
-	err = validateLoginEmailCode(row, "000000")
+	err = validateLoginEmailCode(context.Background(), row, "000000")
 	require.ErrorIs(t, err, errEmailCodeInvalid)
 
-	err = validateLoginEmailCode(row, "123456")
+	err = validateLoginEmailCode(context.Background(), row, "123456")
 	require.NoError(t, err)
 
-	err = validateLoginEmailCode(row, "123456")
+	err = validateLoginEmailCode(context.Background(), row, "123456")
 	require.ErrorIs(t, err, errEmailCodeInvalid)
 }
 
@@ -189,9 +219,9 @@ func TestLoginEmailCodeRejectsMissingAndDisallowedEmail(t *testing.T) {
 		},
 	})
 
-	err := validateLoginEmailCode(xdb.Record{}, "123456")
+	err := validateLoginEmailCode(context.Background(), xdb.Record{}, "123456")
 	require.ErrorIs(t, err, errUserEmailRequired)
 
-	err = validateLoginEmailCode(xdb.Record{"email": "user@other.com"}, "123456")
+	err = validateLoginEmailCode(context.Background(), xdb.Record{"email": "user@other.com"}, "123456")
 	require.ErrorIs(t, err, errEmailSuffixNotAllowed)
 }
