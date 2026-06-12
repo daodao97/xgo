@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -185,6 +186,7 @@ func TestLoginEmailCodeOptionalWithoutSender(t *testing.T) {
 
 func TestLoginEmailCodeRequiredWhenSenderRegistered(t *testing.T) {
 	resetEmailCodeTest(t)
+	t.Setenv("APP_ENV", "prod")
 
 	SetLoginEmailCode(&LoginEmailCodeConf{
 		AllowedSuffixes: []string{"@example.com"},
@@ -209,8 +211,55 @@ func TestLoginEmailCodeRequiredWhenSenderRegistered(t *testing.T) {
 	require.ErrorIs(t, err, errEmailCodeInvalid)
 }
 
+func TestLoginEmailCodeBypassedOutsideProduction(t *testing.T) {
+	resetEmailCodeTest(t)
+	t.Setenv("APP_ENV", "dev")
+
+	SetLoginEmailCode(&LoginEmailCodeConf{
+		AllowedSuffixes: []string{"@example.com"},
+		Sender: func(ctx context.Context, to, code string) error {
+			return nil
+		},
+	})
+
+	err := validateLoginEmailCode(context.Background(), xdb.Record{}, "anything")
+	require.NoError(t, err)
+
+	err = validateLoginEmailCode(context.Background(), xdb.Record{"email": "user@other.com"}, "wrong")
+	require.NoError(t, err)
+}
+
+func TestLoginEmailCodeProductionEnvAliases(t *testing.T) {
+	t.Setenv("APP_ENV", " production ")
+	assert.True(t, loginEmailCodeRequiredInCurrentEnv())
+
+	t.Setenv("APP_ENV", "PROD")
+	assert.True(t, loginEmailCodeRequiredInCurrentEnv())
+
+	t.Setenv("APP_ENV", "pre")
+	assert.False(t, loginEmailCodeRequiredInCurrentEnv())
+}
+
+func TestLoginEmailCodeEnvFromAppEnvArg(t *testing.T) {
+	oldArgs := os.Args
+	t.Cleanup(func() {
+		os.Args = oldArgs
+	})
+
+	t.Setenv("APP_ENV", "")
+	os.Args = []string{"app", "--app-env=prod"}
+	assert.True(t, loginEmailCodeRequiredInCurrentEnv())
+
+	os.Args = []string{"app", "--app-env", "production"}
+	assert.True(t, loginEmailCodeRequiredInCurrentEnv())
+
+	os.Args = []string{"app", "--app-env", "test"}
+	assert.False(t, loginEmailCodeRequiredInCurrentEnv())
+}
+
 func TestLoginEmailCodeRejectsMissingAndDisallowedEmail(t *testing.T) {
 	resetEmailCodeTest(t)
+	t.Setenv("APP_ENV", "prod")
 
 	SetLoginEmailCode(&LoginEmailCodeConf{
 		AllowedSuffixes: []string{"@example.com"},

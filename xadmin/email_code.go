@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/mail"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -131,6 +132,29 @@ func loginEmailCodeEnabled(conf *LoginEmailCodeConf) bool {
 	return conf != nil && conf.Sender != nil
 }
 
+func loginEmailCodeRequiredInCurrentEnv() bool {
+	env := loginEmailCodeCurrentEnv()
+	return env == "prod" || env == "production"
+}
+
+func loginEmailCodeCurrentEnv() string {
+	env := strings.TrimSpace(os.Getenv("APP_ENV"))
+	if env == "" {
+		for i := 1; i < len(os.Args); i++ {
+			arg := strings.TrimSpace(os.Args[i])
+			if strings.HasPrefix(arg, "--app-env=") {
+				env = strings.TrimPrefix(arg, "--app-env=")
+				break
+			}
+			if arg == "--app-env" && i+1 < len(os.Args) {
+				env = os.Args[i+1]
+				break
+			}
+		}
+	}
+	return strings.ToLower(strings.TrimSpace(env))
+}
+
 func emailCodeHandler(w http.ResponseWriter, r *http.Request) {
 	conf := getLoginEmailCodeConf()
 	if !loginEmailCodeEnabled(conf) {
@@ -216,6 +240,9 @@ func resolveEmailCodeTarget(req *emailCodeRequest) (string, error) {
 func validateLoginEmailCode(ctx context.Context, row xdb.Record, code string) error {
 	conf := getLoginEmailCodeConf()
 	if !loginEmailCodeEnabled(conf) {
+		return nil
+	}
+	if !loginEmailCodeRequiredInCurrentEnv() {
 		return nil
 	}
 
