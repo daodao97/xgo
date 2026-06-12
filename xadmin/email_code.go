@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/daodao97/xgo/xapp"
 	"github.com/daodao97/xgo/xdb"
 	"github.com/daodao97/xgo/xhttp"
 )
@@ -131,6 +132,11 @@ func loginEmailCodeEnabled(conf *LoginEmailCodeConf) bool {
 	return conf != nil && conf.Sender != nil
 }
 
+func loginEmailCodeRequiredInCurrentEnv() bool {
+	env := strings.ToLower(strings.TrimSpace(xapp.Args.AppEnv))
+	return env == "prod" || env == "production"
+}
+
 func emailCodeHandler(w http.ResponseWriter, r *http.Request) {
 	conf := getLoginEmailCodeConf()
 	if !loginEmailCodeEnabled(conf) {
@@ -216,6 +222,9 @@ func resolveEmailCodeTarget(req *emailCodeRequest) (string, error) {
 func validateLoginEmailCode(ctx context.Context, row xdb.Record, code string) error {
 	conf := getLoginEmailCodeConf()
 	if !loginEmailCodeEnabled(conf) {
+		return nil
+	}
+	if !loginEmailCodeRequiredInCurrentEnv() {
 		return nil
 	}
 

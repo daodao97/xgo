@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/daodao97/xgo/xapp"
 	"github.com/daodao97/xgo/xdb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -53,6 +54,16 @@ func resetEmailCodeTest(t *testing.T) {
 		loginEmailCodeConf = oldLoginEmailCodeConf
 		loginEmailCodeMu.Unlock()
 		SetLoginEmailCodeStore(oldEmailCodes)
+	})
+}
+
+func setEmailCodeTestEnv(t *testing.T, env string) {
+	t.Helper()
+
+	oldEnv := xapp.Args.AppEnv
+	xapp.Args.AppEnv = env
+	t.Cleanup(func() {
+		xapp.Args.AppEnv = oldEnv
 	})
 }
 
@@ -185,6 +196,7 @@ func TestLoginEmailCodeOptionalWithoutSender(t *testing.T) {
 
 func TestLoginEmailCodeRequiredWhenSenderRegistered(t *testing.T) {
 	resetEmailCodeTest(t)
+	setEmailCodeTestEnv(t, "prod")
 
 	SetLoginEmailCode(&LoginEmailCodeConf{
 		AllowedSuffixes: []string{"@example.com"},
@@ -209,8 +221,38 @@ func TestLoginEmailCodeRequiredWhenSenderRegistered(t *testing.T) {
 	require.ErrorIs(t, err, errEmailCodeInvalid)
 }
 
+func TestLoginEmailCodeBypassedOutsideProduction(t *testing.T) {
+	resetEmailCodeTest(t)
+	setEmailCodeTestEnv(t, "dev")
+
+	SetLoginEmailCode(&LoginEmailCodeConf{
+		AllowedSuffixes: []string{"@example.com"},
+		Sender: func(ctx context.Context, to, code string) error {
+			return nil
+		},
+	})
+
+	err := validateLoginEmailCode(context.Background(), xdb.Record{}, "anything")
+	require.NoError(t, err)
+
+	err = validateLoginEmailCode(context.Background(), xdb.Record{"email": "user@other.com"}, "wrong")
+	require.NoError(t, err)
+}
+
+func TestLoginEmailCodeProductionEnvAliases(t *testing.T) {
+	setEmailCodeTestEnv(t, " production ")
+	assert.True(t, loginEmailCodeRequiredInCurrentEnv())
+
+	xapp.Args.AppEnv = "PROD"
+	assert.True(t, loginEmailCodeRequiredInCurrentEnv())
+
+	xapp.Args.AppEnv = "pre"
+	assert.False(t, loginEmailCodeRequiredInCurrentEnv())
+}
+
 func TestLoginEmailCodeRejectsMissingAndDisallowedEmail(t *testing.T) {
 	resetEmailCodeTest(t)
+	setEmailCodeTestEnv(t, "prod")
 
 	SetLoginEmailCode(&LoginEmailCodeConf{
 		AllowedSuffixes: []string{"@example.com"},
