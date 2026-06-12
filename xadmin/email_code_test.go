@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
+	"github.com/daodao97/xgo/xapp"
 	"github.com/daodao97/xgo/xdb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,6 +54,16 @@ func resetEmailCodeTest(t *testing.T) {
 		loginEmailCodeConf = oldLoginEmailCodeConf
 		loginEmailCodeMu.Unlock()
 		SetLoginEmailCodeStore(oldEmailCodes)
+	})
+}
+
+func setEmailCodeTestEnv(t *testing.T, env string) {
+	t.Helper()
+
+	oldEnv := xapp.Args.AppEnv
+	xapp.Args.AppEnv = env
+	t.Cleanup(func() {
+		xapp.Args.AppEnv = oldEnv
 	})
 }
 
@@ -186,7 +196,7 @@ func TestLoginEmailCodeOptionalWithoutSender(t *testing.T) {
 
 func TestLoginEmailCodeRequiredWhenSenderRegistered(t *testing.T) {
 	resetEmailCodeTest(t)
-	t.Setenv("APP_ENV", "prod")
+	setEmailCodeTestEnv(t, "prod")
 
 	SetLoginEmailCode(&LoginEmailCodeConf{
 		AllowedSuffixes: []string{"@example.com"},
@@ -213,7 +223,7 @@ func TestLoginEmailCodeRequiredWhenSenderRegistered(t *testing.T) {
 
 func TestLoginEmailCodeBypassedOutsideProduction(t *testing.T) {
 	resetEmailCodeTest(t)
-	t.Setenv("APP_ENV", "dev")
+	setEmailCodeTestEnv(t, "dev")
 
 	SetLoginEmailCode(&LoginEmailCodeConf{
 		AllowedSuffixes: []string{"@example.com"},
@@ -230,36 +240,19 @@ func TestLoginEmailCodeBypassedOutsideProduction(t *testing.T) {
 }
 
 func TestLoginEmailCodeProductionEnvAliases(t *testing.T) {
-	t.Setenv("APP_ENV", " production ")
+	setEmailCodeTestEnv(t, " production ")
 	assert.True(t, loginEmailCodeRequiredInCurrentEnv())
 
-	t.Setenv("APP_ENV", "PROD")
+	xapp.Args.AppEnv = "PROD"
 	assert.True(t, loginEmailCodeRequiredInCurrentEnv())
 
-	t.Setenv("APP_ENV", "pre")
-	assert.False(t, loginEmailCodeRequiredInCurrentEnv())
-}
-
-func TestLoginEmailCodeEnvFromAppEnvArg(t *testing.T) {
-	oldArgs := os.Args
-	t.Cleanup(func() {
-		os.Args = oldArgs
-	})
-
-	t.Setenv("APP_ENV", "")
-	os.Args = []string{"app", "--app-env=prod"}
-	assert.True(t, loginEmailCodeRequiredInCurrentEnv())
-
-	os.Args = []string{"app", "--app-env", "production"}
-	assert.True(t, loginEmailCodeRequiredInCurrentEnv())
-
-	os.Args = []string{"app", "--app-env", "test"}
+	xapp.Args.AppEnv = "pre"
 	assert.False(t, loginEmailCodeRequiredInCurrentEnv())
 }
 
 func TestLoginEmailCodeRejectsMissingAndDisallowedEmail(t *testing.T) {
 	resetEmailCodeTest(t)
-	t.Setenv("APP_ENV", "prod")
+	setEmailCodeTestEnv(t, "prod")
 
 	SetLoginEmailCode(&LoginEmailCodeConf{
 		AllowedSuffixes: []string{"@example.com"},

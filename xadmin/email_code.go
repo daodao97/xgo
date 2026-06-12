@@ -9,11 +9,11 @@ import (
 	"math/big"
 	"net/http"
 	"net/mail"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/daodao97/xgo/xapp"
 	"github.com/daodao97/xgo/xdb"
 	"github.com/daodao97/xgo/xhttp"
 )
@@ -133,26 +133,8 @@ func loginEmailCodeEnabled(conf *LoginEmailCodeConf) bool {
 }
 
 func loginEmailCodeRequiredInCurrentEnv() bool {
-	env := loginEmailCodeCurrentEnv()
+	env := strings.ToLower(strings.TrimSpace(xapp.Args.AppEnv))
 	return env == "prod" || env == "production"
-}
-
-func loginEmailCodeCurrentEnv() string {
-	env := strings.TrimSpace(os.Getenv("APP_ENV"))
-	if env == "" {
-		for i := 1; i < len(os.Args); i++ {
-			arg := strings.TrimSpace(os.Args[i])
-			if strings.HasPrefix(arg, "--app-env=") {
-				env = strings.TrimPrefix(arg, "--app-env=")
-				break
-			}
-			if arg == "--app-env" && i+1 < len(os.Args) {
-				env = os.Args[i+1]
-				break
-			}
-		}
-	}
-	return strings.ToLower(strings.TrimSpace(env))
 }
 
 func emailCodeHandler(w http.ResponseWriter, r *http.Request) {
