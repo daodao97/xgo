@@ -111,6 +111,7 @@ type where struct {
 	logic    string
 	sub      []where
 	raw      string
+	rawArgs  []any
 }
 
 func WhereRaw(raw string) Option {
@@ -126,6 +127,31 @@ func WhereOrRaw(raw string) Option {
 		opts.where = append(opts.where, where{
 			raw:   raw,
 			logic: "or",
+		})
+	}
+}
+
+// WhereRawArgs 追加一个带 ? 占位符的 raw WHERE 片段。
+// raw 中每个 ? 按从左到右顺序消费 args 中的一个值，作为绑定参数下发
+// （driver 预处理占位符，非字符串拼接）。
+// 约定 raw 中 ? 的个数应等于 len(args)，由调用方保证；数量不匹配时由 driver 在执行阶段报错。
+// WhereRaw(raw) 等价于 WhereRawArgs(raw) 无参数。
+func WhereRawArgs(raw string, args ...any) Option {
+	return func(opts *Options) {
+		opts.where = append(opts.where, where{
+			raw:     raw,
+			rawArgs: args,
+		})
+	}
+}
+
+// WhereOrRawArgs 是 WhereRawArgs 的 OR 逻辑变体。
+func WhereOrRawArgs(raw string, args ...any) Option {
+	return func(opts *Options) {
+		opts.where = append(opts.where, where{
+			raw:     raw,
+			rawArgs: args,
+			logic:   "or",
 		})
 	}
 }
@@ -486,6 +512,7 @@ func whereBuilder(condition []where) (sql string, args []any) {
 
 		if v.raw != "" {
 			tokens = append(tokens, v.raw)
+			args = append(args, v.rawArgs...)
 			continue
 		}
 
