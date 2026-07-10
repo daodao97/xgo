@@ -12,12 +12,17 @@ const deleteMod = "delete from %s"
 
 type Option = func(opts *Options)
 
+type sqlFragment struct {
+	sql  string
+	args []any
+}
+
 type Options struct {
 	database  string
 	table     string
 	field     []string
 	where     []where
-	orderBy   []string
+	orderBy   []sqlFragment
 	groupBy   string
 	limit     int
 	offset    int
@@ -480,14 +485,35 @@ func WhereOrFindInSet(field string, value any) Option {
 
 func OrderByDesc(field string) Option {
 	return func(opts *Options) {
-		opts.orderBy = append(opts.orderBy, field+" desc")
+		opts.orderBy = append(opts.orderBy, sqlFragment{sql: field + " desc"})
 	}
 }
 
 func OrderByAsc(field string) Option {
 	return func(opts *Options) {
-		opts.orderBy = append(opts.orderBy, field+" asc")
+		opts.orderBy = append(opts.orderBy, sqlFragment{sql: field + " asc"})
 	}
+}
+
+// OrderByRaw appends a raw ORDER BY expression with bound arguments.
+// raw must be trusted application SQL; dynamic values belong in args.
+// Placeholder mismatches are reported by the database driver at execution time.
+func OrderByRaw(raw string, args ...any) Option {
+	return func(opts *Options) {
+		opts.orderBy = append(opts.orderBy, sqlFragment{
+			sql:  raw,
+			args: args,
+		})
+	}
+}
+
+func orderByBuilder(orderBy []sqlFragment) (sql string, args []any) {
+	expressions := make([]string, 0, len(orderBy))
+	for _, fragment := range orderBy {
+		expressions = append(expressions, fragment.sql)
+		args = append(args, fragment.args...)
+	}
+	return strings.Join(expressions, ", "), args
 }
 
 func GroupBy(field string) Option {
@@ -573,7 +599,9 @@ func SelectBuilder(opts ...Option) (sql string, args []any) {
 	}
 
 	if len(_opts.orderBy) > 0 {
-		sql = sql + " order by " + strings.Join(_opts.orderBy, ", ")
+		_orderBy, _args := orderByBuilder(_opts.orderBy)
+		sql = sql + " order by " + _orderBy
+		args = append(args, _args...)
 	}
 
 	if _opts.limit != 0 {

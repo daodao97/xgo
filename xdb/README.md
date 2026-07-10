@@ -248,6 +248,13 @@ xdb.WhereFindInSet("tags", "golang")
 xdb.OrderByDesc("created_at")
 xdb.OrderByAsc("id")
 
+// 带绑定参数的原始排序表达式
+xdb.OrderByRaw(
+    "MATCH(title,description,summary) AGAINST(? IN NATURAL LANGUAGE MODE) DESC",
+    keyword,
+)
+// 原始 SQL 表达式必须由应用代码控制；动态值通过参数绑定传入。
+
 // 分页
 xdb.Limit(10)
 xdb.Offset(20)
