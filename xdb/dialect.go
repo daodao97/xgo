@@ -3,6 +3,7 @@ package xdb
 import (
 	"fmt"
 	"strings"
+	"sync"
 )
 
 // Dialect 定义了数据库方言接口，用于处理不同数据库的 SQL 语法差异
@@ -43,12 +44,154 @@ type Dialect interface {
 	LimitOffset(limit, offset int) string
 }
 
+type identifierQuoter interface {
+	QuoteIdentifier(identifier string) string
+}
+
+type forUpdateDialect interface {
+	ForUpdate() string
+}
+
+func forUpdateSQL(dialect Dialect) string {
+	if dialect == nil {
+		return " for update"
+	}
+	if d, ok := dialect.(forUpdateDialect); ok {
+		return d.ForUpdate()
+	}
+	return " for update"
+}
+
 // 确保所有实现都满足 Dialect 接口
 var (
 	_ Dialect = (*MySQLDialect)(nil)
 	_ Dialect = (*PostgreSQLDialect)(nil)
 	_ Dialect = (*SQLiteDialect)(nil)
 )
+
+func convertQuestionPlaceholders(sql string, placeholder func(index int) string) string {
+	if sql == "" {
+		return sql
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(sql))
+	argIndex := 1
+
+	for i := 0; i < len(sql); i++ {
+		switch sql[i] {
+		case '\'':
+			i = copyQuotedSQL(&builder, sql, i, '\'')
+		case '"':
+			i = copyQuotedSQL(&builder, sql, i, '"')
+		case '`':
+			i = copyQuotedSQL(&builder, sql, i, '`')
+		case '-':
+			if i+1 < len(sql) && sql[i+1] == '-' {
+				i = copyLineComment(&builder, sql, i)
+			} else {
+				builder.WriteByte(sql[i])
+			}
+		case '/':
+			if i+1 < len(sql) && sql[i+1] == '*' {
+				i = copyBlockComment(&builder, sql, i)
+			} else {
+				builder.WriteByte(sql[i])
+			}
+		case '?':
+			if i+1 < len(sql) && sql[i+1] == '?' {
+				builder.WriteByte('?')
+				i++
+				continue
+			}
+			builder.WriteString(placeholder(argIndex))
+			argIndex++
+		default:
+			builder.WriteByte(sql[i])
+		}
+	}
+
+	return builder.String()
+}
+
+func copyQuotedSQL(builder *strings.Builder, sql string, start int, quote byte) int {
+	builder.WriteByte(sql[start])
+	for i := start + 1; i < len(sql); i++ {
+		builder.WriteByte(sql[i])
+		if sql[i] == quote {
+			if i+1 < len(sql) && sql[i+1] == quote {
+				i++
+				builder.WriteByte(sql[i])
+				continue
+			}
+			if quote != '`' && i > 0 && sql[i-1] == '\\' {
+				continue
+			}
+			return i
+		}
+	}
+	return len(sql) - 1
+}
+
+func copyLineComment(builder *strings.Builder, sql string, start int) int {
+	builder.WriteString("--")
+	for i := start + 2; i < len(sql); i++ {
+		builder.WriteByte(sql[i])
+		if sql[i] == '\n' {
+			return i
+		}
+	}
+	return len(sql) - 1
+}
+
+func copyBlockComment(builder *strings.Builder, sql string, start int) int {
+	builder.WriteString("/*")
+	for i := start + 2; i < len(sql); i++ {
+		builder.WriteByte(sql[i])
+		if sql[i] == '*' && i+1 < len(sql) && sql[i+1] == '/' {
+			i++
+			builder.WriteByte(sql[i])
+			return i
+		}
+	}
+	return len(sql) - 1
+}
+
+func quoteIdentifierWith(identifier, quote string) string {
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" || identifier == "*" {
+		return identifier
+	}
+	if isQuotedIdentifier(identifier) {
+		return identifier
+	}
+	parts := strings.Split(identifier, ".")
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "*" || isQuotedIdentifier(part) {
+			parts[i] = part
+			continue
+		}
+		parts[i] = quote + strings.ReplaceAll(part, quote, quote+quote) + quote
+	}
+	return strings.Join(parts, ".")
+}
+
+func isQuotedIdentifier(identifier string) bool {
+	if len(identifier) < 2 {
+		return false
+	}
+	switch {
+	case identifier[0] == '`' && identifier[len(identifier)-1] == '`':
+		return true
+	case identifier[0] == '"' && identifier[len(identifier)-1] == '"':
+		return true
+	case identifier[0] == '[' && identifier[len(identifier)-1] == ']':
+		return true
+	default:
+		return false
+	}
+}
 
 // MySQLDialect MySQL 方言实现
 type MySQLDialect struct{}
@@ -70,6 +213,10 @@ func (d *MySQLDialect) Placeholders(count int) string {
 
 func (d *MySQLDialect) ConvertPlaceholders(sql string) string {
 	return sql // MySQL 使用 ? 占位符，无需转换
+}
+
+func (d *MySQLDialect) QuoteIdentifier(identifier string) string {
+	return quoteIdentifierWith(identifier, "`")
 }
 
 func (d *MySQLDialect) InsertReturning(sql string, primaryKey string) string {
@@ -99,7 +246,11 @@ func (d *MySQLDialect) Upsert(table string, fields []string, placeholders string
 }
 
 func (d *MySQLDialect) LimitOffset(limit, offset int) string {
-	return fmt.Sprintf(" LIMIT %d OFFSET %d", limit, offset)
+	return " limit ? offset ?"
+}
+
+func (d *MySQLDialect) ForUpdate() string {
+	return " for update"
 }
 
 // PostgreSQLDialect PostgreSQL 方言实现
@@ -125,19 +276,11 @@ func (d *PostgreSQLDialect) Placeholders(count int) string {
 }
 
 func (d *PostgreSQLDialect) ConvertPlaceholders(sql string) string {
-	parts := strings.Split(sql, "?")
-	if len(parts) <= 1 {
-		return sql
-	}
+	return convertQuestionPlaceholders(sql, d.Placeholder)
+}
 
-	var builder strings.Builder
-	for i, part := range parts {
-		builder.WriteString(part)
-		if i < len(parts)-1 {
-			builder.WriteString(fmt.Sprintf("$%d", i+1))
-		}
-	}
-	return builder.String()
+func (d *PostgreSQLDialect) QuoteIdentifier(identifier string) string {
+	return quoteIdentifierWith(identifier, `"`)
 }
 
 func (d *PostgreSQLDialect) InsertReturning(sql string, primaryKey string) string {
@@ -167,7 +310,11 @@ func (d *PostgreSQLDialect) Upsert(table string, fields []string, placeholders s
 }
 
 func (d *PostgreSQLDialect) LimitOffset(limit, offset int) string {
-	return fmt.Sprintf(" LIMIT %d OFFSET %d", limit, offset)
+	return " limit ? offset ?"
+}
+
+func (d *PostgreSQLDialect) ForUpdate() string {
+	return " for update"
 }
 
 // SQLiteDialect SQLite 方言实现
@@ -190,6 +337,10 @@ func (d *SQLiteDialect) Placeholders(count int) string {
 
 func (d *SQLiteDialect) ConvertPlaceholders(sql string) string {
 	return sql // SQLite 使用 ? 占位符，无需转换
+}
+
+func (d *SQLiteDialect) QuoteIdentifier(identifier string) string {
+	return quoteIdentifierWith(identifier, `"`)
 }
 
 func (d *SQLiteDialect) InsertReturning(sql string, primaryKey string) string {
@@ -219,7 +370,11 @@ func (d *SQLiteDialect) Upsert(table string, fields []string, placeholders strin
 }
 
 func (d *SQLiteDialect) LimitOffset(limit, offset int) string {
-	return fmt.Sprintf(" LIMIT %d OFFSET %d", limit, offset)
+	return " limit ? offset ?"
+}
+
+func (d *SQLiteDialect) ForUpdate() string {
+	return ""
 }
 
 // 方言实例（单例模式）
@@ -227,18 +382,37 @@ var (
 	dialectMySQL      = &MySQLDialect{}
 	dialectPostgreSQL = &PostgreSQLDialect{}
 	dialectSQLite     = &SQLiteDialect{}
+
+	dialectsMu sync.RWMutex
+	dialects   = map[string]Dialect{
+		"":           dialectMySQL,
+		"mysql":      dialectMySQL,
+		"postgres":   dialectPostgreSQL,
+		"postgresql": dialectPostgreSQL,
+		"pgx":        dialectPostgreSQL,
+		"sqlite":     dialectSQLite,
+		"sqlite3":    dialectSQLite,
+	}
 )
+
+func RegisterDialect(driver string, dialect Dialect) {
+	if driver == "" || dialect == nil {
+		return
+	}
+	dialectsMu.Lock()
+	defer dialectsMu.Unlock()
+	dialects[strings.ToLower(driver)] = dialect
+}
 
 // GetDialect 根据驱动名称获取对应的方言实现
 func GetDialect(driver string) Dialect {
-	switch driver {
-	case "postgres", "postgresql", "pgx":
-		return dialectPostgreSQL
-	case "sqlite", "sqlite3":
-		return dialectSQLite
-	default:
-		return dialectMySQL
+	dialectsMu.RLock()
+	dialect, ok := dialects[strings.ToLower(driver)]
+	dialectsMu.RUnlock()
+	if ok {
+		return dialect
 	}
+	return dialectMySQL
 }
 
 // IsPostgres 检查是否为 PostgreSQL 驱动

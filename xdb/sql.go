@@ -3,6 +3,7 @@ package xdb
 import (
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 const selectMod = "select %s from %s"
@@ -16,6 +17,7 @@ type Options struct {
 	database  string
 	table     string
 	field     []string
+	rawField  map[string]bool
 	where     []where
 	orderBy   []string
 	groupBy   string
@@ -83,6 +85,10 @@ func Field(name ...string) Option {
 func FieldRaw(name string) Option {
 	return func(opts *Options) {
 		opts.field = append(opts.field, name)
+		if opts.rawField == nil {
+			opts.rawField = make(map[string]bool)
+		}
+		opts.rawField[name] = true
 	}
 }
 
@@ -496,7 +502,184 @@ func GroupBy(field string) Option {
 	}
 }
 
+func quoteIdentifier(dialect Dialect, identifier string) string {
+	if dialect == nil {
+		return identifier
+	}
+	if !isSimpleIdentifierPath(identifier) {
+		return identifier
+	}
+	if quoter, ok := dialect.(identifierQuoter); ok {
+		return quoter.QuoteIdentifier(identifier)
+	}
+	return identifier
+}
+
+func quoteIdentifiers(dialect Dialect, identifiers []string) []string {
+	quoted := make([]string, 0, len(identifiers))
+	for _, identifier := range identifiers {
+		quoted = append(quoted, quoteIdentifier(dialect, identifier))
+	}
+	return quoted
+}
+
+func quoteSelectFields(dialect Dialect, fields []string) string {
+	return quoteSelectFieldsWithRaw(dialect, fields, nil)
+}
+
+func quoteSelectFieldsWithRaw(dialect Dialect, fields []string, raw map[string]bool) string {
+	quoted := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if raw[field] {
+			quoted = append(quoted, field)
+			continue
+		}
+		quoted = append(quoted, quoteAliasedIdentifier(dialect, field))
+	}
+	return strings.Join(quoted, ", ")
+}
+
+func quoteAliasedIdentifier(dialect Dialect, expr string) string {
+	left, alias, ok := splitAlias(expr)
+	if !ok {
+		return quoteIdentifier(dialect, strings.TrimSpace(expr))
+	}
+	left = strings.TrimSpace(left)
+	alias = strings.TrimSpace(alias)
+	if alias == "" {
+		return quoteIdentifier(dialect, left)
+	}
+	return quoteIdentifier(dialect, left) + " as " + quoteIdentifier(dialect, alias)
+}
+
+func splitAlias(expr string) (left, alias string, ok bool) {
+	lower := strings.ToLower(expr)
+	index := strings.LastIndex(lower, " as ")
+	if index < 0 {
+		return "", "", false
+	}
+	return expr[:index], expr[index+4:], true
+}
+
+func quoteIdentifierList(dialect Dialect, identifiers string) string {
+	parts := strings.Split(identifiers, ",")
+	for i, part := range parts {
+		parts[i] = quoteAliasedIdentifier(dialect, strings.TrimSpace(part))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func quoteOrderBy(dialect Dialect, orderBy []string) string {
+	quoted := make([]string, 0, len(orderBy))
+	for _, order := range orderBy {
+		quoted = append(quoted, quoteOrderItem(dialect, order))
+	}
+	return strings.Join(quoted, ", ")
+}
+
+func quoteOrderItem(dialect Dialect, order string) string {
+	parts := strings.Fields(order)
+	if len(parts) == 0 {
+		return order
+	}
+	if len(parts) == 1 {
+		return quoteIdentifier(dialect, parts[0])
+	}
+	direction := strings.ToLower(parts[len(parts)-1])
+	if direction != "asc" && direction != "desc" {
+		return order
+	}
+	identifier := strings.Join(parts[:len(parts)-1], " ")
+	return quoteIdentifier(dialect, identifier) + " " + direction
+}
+
+func isSimpleIdentifierPath(identifier string) bool {
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" || identifier == "*" {
+		return true
+	}
+	if isQuotedIdentifier(identifier) {
+		return true
+	}
+	parts := strings.Split(identifier, ".")
+	for _, part := range parts {
+		if part == "" {
+			return false
+		}
+		if part == "*" || isQuotedIdentifier(part) {
+			continue
+		}
+		for _, r := range part {
+			if r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r) {
+				continue
+			}
+			return false
+		}
+	}
+	return true
+}
+
+func validateIdentifier(identifier string) error {
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" {
+		return nil
+	}
+	if !isSimpleIdentifierPath(identifier) {
+		return fmt.Errorf("%w: %s", ErrInvalidIdentifier, identifier)
+	}
+	return nil
+}
+
+func validateAliasedIdentifier(identifier string) error {
+	left, alias, ok := splitAlias(identifier)
+	if !ok {
+		return validateIdentifier(identifier)
+	}
+	if err := validateIdentifier(left); err != nil {
+		return err
+	}
+	return validateIdentifier(alias)
+}
+
+func validateOrderIdentifier(identifier string) error {
+	parts := strings.Fields(identifier)
+	if len(parts) == 0 {
+		return nil
+	}
+	if len(parts) == 1 {
+		return validateIdentifier(parts[0])
+	}
+	direction := strings.ToLower(parts[len(parts)-1])
+	if direction != "asc" && direction != "desc" {
+		return fmt.Errorf("%w: %s", ErrInvalidIdentifier, identifier)
+	}
+	return validateIdentifier(strings.Join(parts[:len(parts)-1], " "))
+}
+
+func validateWhereIdentifiers(condition []where) error {
+	for _, item := range condition {
+		if item.raw != "" {
+			continue
+		}
+		if item.field != "" {
+			if err := validateIdentifier(item.field); err != nil {
+				return err
+			}
+		}
+		if len(item.sub) > 0 {
+			if err := validateWhereIdentifiers(item.sub); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func whereBuilder(condition []where) (sql string, args []any) {
+	return whereBuilderWithDialect(nil, condition)
+}
+
+func whereBuilderWithDialect(dialect Dialect, condition []where) (sql string, args []any) {
 	if len(condition) == 0 {
 		return "", nil
 	}
@@ -520,27 +703,35 @@ func whereBuilder(condition []where) (sql string, args []any) {
 			switch v.operator {
 			case "in", "not in":
 				val := v.value.([]any)
+				if len(val) == 0 {
+					if v.operator == "in" {
+						tokens = append(tokens, "1 = 0")
+					} else {
+						tokens = append(tokens, "1 = 1")
+					}
+					continue
+				}
 				var placeholder []string
 				for range val {
 					placeholder = append(placeholder, "?")
 				}
-				tokens = append(tokens, fmt.Sprintf("%s %s (%s)", v.field, v.operator, strings.Join(placeholder, ",")))
+				tokens = append(tokens, fmt.Sprintf("%s %s (%s)", quoteIdentifier(dialect, v.field), v.operator, strings.Join(placeholder, ",")))
 				args = append(args, val...)
 			case "between":
 				val := v.value.([]any)
-				tokens = append(tokens, fmt.Sprintf("%s %s ? and ?", v.field, v.operator))
+				tokens = append(tokens, fmt.Sprintf("%s %s ? and ?", quoteIdentifier(dialect, v.field), v.operator))
 				args = append(args, val...)
 			case "find_in_set":
-				tokens = append(tokens, fmt.Sprintf("find_in_set(?, %s)", v.field))
+				tokens = append(tokens, fmt.Sprintf("find_in_set(?, %s)", quoteIdentifier(dialect, v.field)))
 				args = append(args, v.value)
 			default:
-				tokens = append(tokens, fmt.Sprintf("%s %s ?", v.field, v.operator))
+				tokens = append(tokens, fmt.Sprintf("%s %s ?", quoteIdentifier(dialect, v.field), v.operator))
 				args = append(args, v.value)
 			}
 		}
 
 		if v.sub != nil {
-			_sql, _args := whereBuilder(v.sub)
+			_sql, _args := whereBuilderWithDialect(dialect, v.sub)
 			tokens = append(tokens, "("+_sql+")")
 			args = append(args, _args...)
 		}
@@ -550,52 +741,68 @@ func whereBuilder(condition []where) (sql string, args []any) {
 }
 
 func SelectBuilder(opts ...Option) (sql string, args []any) {
+	return SelectBuilderWithDialect(nil, opts...)
+}
+
+func SelectBuilderWithDialect(dialect Dialect, opts ...Option) (sql string, args []any) {
 	_opts := &Options{}
 	for _, v := range opts {
 		v(_opts)
 	}
 
-	_where, args := whereBuilder(_opts.where)
+	_where, args := whereBuilderWithDialect(dialect, _opts.where)
 	_field := "*"
 
 	if len(_opts.field) > 0 {
-		_field = strings.Join(_opts.field, ", ")
+		_field = quoteSelectFieldsWithRaw(dialect, _opts.field, _opts.rawField)
 	}
 
-	sql = fmt.Sprintf(selectMod, _field, _opts.table)
+	sql = fmt.Sprintf(selectMod, _field, quoteTable(dialect, _opts))
 
 	if _where != "" {
 		sql = sql + " where " + _where
 	}
 
 	if _opts.groupBy != "" {
-		sql = sql + " group by " + _opts.groupBy
+		sql = sql + " group by " + quoteIdentifierList(dialect, _opts.groupBy)
 	}
 
 	if len(_opts.orderBy) > 0 {
-		sql = sql + " order by " + strings.Join(_opts.orderBy, ", ")
+		sql = sql + " order by " + quoteOrderBy(dialect, _opts.orderBy)
 	}
 
 	if _opts.limit != 0 {
-		sql = sql + " limit ? offset ?"
+		if dialect != nil {
+			sql = sql + dialect.LimitOffset(_opts.limit, _opts.offset)
+		} else {
+			sql = sql + " limit ? offset ?"
+		}
 		args = append(args, _opts.limit, _opts.offset)
 	}
 
 	if _opts.forUpdate {
-		sql = sql + " for update"
+		sql = sql + forUpdateSQL(dialect)
 	}
 
 	return sql, args
 }
 
 func getTable(opt *Options) string {
+	return quoteTable(nil, opt)
+}
+
+func quoteTable(dialect Dialect, opt *Options) string {
 	if opt.database == "" {
-		return opt.table
+		return quoteIdentifier(dialect, opt.table)
 	}
-	return opt.database + "." + opt.table
+	return quoteIdentifier(dialect, opt.database) + "." + quoteIdentifier(dialect, opt.table)
 }
 
 func InsertBuilder(opts ...Option) (sql string, args []any) {
+	return InsertBuilderWithDialect(nil, opts...)
+}
+
+func InsertBuilderWithDialect(dialect Dialect, opts ...Option) (sql string, args []any) {
 	_opts := &Options{}
 	for _, v := range opts {
 		v(_opts)
@@ -604,7 +811,7 @@ func InsertBuilder(opts ...Option) (sql string, args []any) {
 	for range _opts.field {
 		_val = append(_val, "?")
 	}
-	sql = fmt.Sprintf(insertMod, getTable(_opts), strings.Join(_opts.field, ", "), strings.Join(_val, ","))
+	sql = fmt.Sprintf(insertMod, quoteTable(dialect, _opts), quoteIdentifierList(dialect, strings.Join(_opts.field, ", ")), strings.Join(_val, ","))
 	args = _opts.value
 	return sql, args
 }
@@ -651,18 +858,22 @@ func UniqueString(str []string) []string {
 }
 
 func UpdateBuilder(opts ...Option) (sql string, args []any) {
+	return UpdateBuilderWithDialect(nil, opts...)
+}
+
+func UpdateBuilderWithDialect(dialect Dialect, opts ...Option) (sql string, args []any) {
 	_opts := &Options{}
 	for _, v := range opts {
 		v(_opts)
 	}
 	var _set []string
 	for i, v := range _opts.field {
-		_set = append(_set, parseSet(v, _opts.value[i]))
+		_set = append(_set, parseSetWithDialect(dialect, v, _opts.value[i]))
 	}
-	sql = fmt.Sprintf(updateMod, getTable(_opts), strings.Join(_set, ","))
+	sql = fmt.Sprintf(updateMod, quoteTable(dialect, _opts), strings.Join(_set, ","))
 	args = parseSetValues(_opts.value)
 	if len(_opts.where) > 0 {
-		_where, _args := whereBuilder(_opts.where)
+		_where, _args := whereBuilderWithDialect(dialect, _opts.where)
 		sql = sql + " where " + _where
 		args = append(args, _args...)
 	}
@@ -670,13 +881,17 @@ func UpdateBuilder(opts ...Option) (sql string, args []any) {
 }
 
 func DeleteBuilder(opts ...Option) (sql string, args []any) {
+	return DeleteBuilderWithDialect(nil, opts...)
+}
+
+func DeleteBuilderWithDialect(dialect Dialect, opts ...Option) (sql string, args []any) {
 	_opts := &Options{}
 	for _, v := range opts {
 		v(_opts)
 	}
-	sql = fmt.Sprintf(deleteMod, _opts.table)
+	sql = fmt.Sprintf(deleteMod, quoteTable(dialect, _opts))
 	if len(_opts.where) > 0 {
-		_where, _args := whereBuilder(_opts.where)
+		_where, _args := whereBuilderWithDialect(dialect, _opts.where)
 		sql = sql + " where " + _where
 		args = append(args, _args...)
 	}
@@ -703,15 +918,20 @@ func SelfSub(value any) UpdateValue {
 }
 
 func parseSet(field string, value any) string {
+	return parseSetWithDialect(nil, field, value)
+}
+
+func parseSetWithDialect(dialect Dialect, field string, value any) string {
+	quotedField := quoteIdentifier(dialect, field)
 	if uv, ok := value.(UpdateValue); ok {
 		switch uv.Op {
 		case OpAdd:
-			return fmt.Sprintf("%s = %s + ?", field, field)
+			return fmt.Sprintf("%s = %s + ?", quotedField, quotedField)
 		case OpSub:
-			return fmt.Sprintf("%s = %s - ?", field, field)
+			return fmt.Sprintf("%s = %s - ?", quotedField, quotedField)
 		}
 	}
-	return fmt.Sprintf("%s = ?", field)
+	return fmt.Sprintf("%s = ?", quotedField)
 }
 
 func parseSetValues(values []any) []any {

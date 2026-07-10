@@ -1,6 +1,7 @@
 package xdb
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -9,54 +10,36 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+func sqlContext(ctx context.Context) context.Context {
+	if ctx != nil {
+		return ctx
+	}
+	return context.Background()
+}
+
 // 一般用Prepared Statements和Exec()完成INSERT, UPDATE, DELETE操作
 func exec(db *sql.DB, _sql string, args ...any) (res sql.Result, err error) {
-	tx, err := db.Begin()
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
-	stmt, err := tx.Prepare(_sql)
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-	res, err = stmt.Exec(args...)
-	if err != nil {
-		return nil, err
-	}
-	err = tx.Commit()
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
+	return execContext(context.Background(), db, _sql, args...)
+}
+
+func execContext(ctx context.Context, db *sql.DB, _sql string, args ...any) (sql.Result, error) {
+	return db.ExecContext(sqlContext(ctx), _sql, args...)
 }
 
 func execTx(tx *sql.Tx, _sql string, args ...any) (res sql.Result, err error) {
-	stmt, err := tx.Prepare(_sql)
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-	res, err = stmt.Exec(args...)
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
+	return execTxContext(context.Background(), tx, _sql, args...)
+}
+
+func execTxContext(ctx context.Context, tx *sql.Tx, _sql string, args ...any) (sql.Result, error) {
+	return tx.ExecContext(sqlContext(ctx), _sql, args...)
 }
 
 func query(db *sql.DB, _sql string, args ...any) (result []Row, err error) {
-	stmt, err := db.Prepare(_sql)
-	if err != nil {
-		return nil, errors.Wrap(err, "fly.exec.Prepare err")
-	}
-	defer stmt.Close()
+	return queryContext(context.Background(), db, _sql, args...)
+}
 
-	rows, err := stmt.Query(args...)
+func queryContext(ctx context.Context, db *sql.DB, _sql string, args ...any) (result []Row, err error) {
+	rows, err := db.QueryContext(sqlContext(ctx), _sql, args...)
 	if err != nil {
 		return nil, errors.Wrap(err, "fly.exec.Query err")
 	}
@@ -66,13 +49,11 @@ func query(db *sql.DB, _sql string, args ...any) (result []Row, err error) {
 }
 
 func queryTx(tx *sql.Tx, _sql string, args ...any) (result []Row, err error) {
-	stmt, err := tx.Prepare(_sql)
-	if err != nil {
-		return nil, errors.Wrap(err, "fly.exec.Prepare err")
-	}
-	defer stmt.Close()
+	return queryTxContext(context.Background(), tx, _sql, args...)
+}
 
-	rows, err := stmt.Query(args...)
+func queryTxContext(ctx context.Context, tx *sql.Tx, _sql string, args ...any) (result []Row, err error) {
+	rows, err := tx.QueryContext(sqlContext(ctx), _sql, args...)
 	if err != nil {
 		return nil, errors.Wrap(err, "fly.exec.Query err")
 	}

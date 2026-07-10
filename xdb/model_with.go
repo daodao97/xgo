@@ -12,10 +12,33 @@ func WithDB(db *sql.DB) With {
 	}
 }
 
+func WithReadDB(db *sql.DB) With {
+	return func(b *model) {
+		b.readClient = db
+	}
+}
+
+func WithDialect(dialect Dialect) With {
+	return func(b *model) {
+		b.dialect = dialect
+	}
+}
+
+func WithDriver(driver string) With {
+	return func(b *model) {
+		b.dialect = GetDialect(driver)
+		b.config = &Config{Driver: driver}
+	}
+}
+
 func WithConn(name string) With {
 	return func(b *model) {
 		b.connection = name
 	}
+}
+
+func WithConnection(name string) With {
+	return WithConn(name)
 }
 
 func WithFakeDelKey(name string) With {
@@ -77,6 +100,16 @@ func WithSaveZero() With {
 	return func(b *model) {
 		b.saveZero = true
 	}
+}
+
+func WithStrictIdentifier() With {
+	return func(b *model) {
+		b.strictIdentifier = true
+	}
+}
+
+func WithStrictIdentifiers() With {
+	return WithStrictIdentifier()
 }
 
 func HasOne(opts ...HasOpts) With {

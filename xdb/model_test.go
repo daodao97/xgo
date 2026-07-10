@@ -1,6 +1,7 @@
 package xdb
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -10,19 +11,22 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var dsn = "root@tcp(127.0.0.1:3306)/fly_test?&parseTime=true"
+func mysqlModel(t *testing.T) Model {
+	t.Helper()
 
-var m Model
-
-func init() {
-	err := Init(map[string]*Config{
-		"default": {DSN: dsn},
-	})
-	if err != nil {
-		panic(err)
+	dsn := os.Getenv("XDB_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("set XDB_MYSQL_DSN to run MySQL integration tests")
 	}
 
-	m = New(
+	err := Init(map[string]*Config{
+		"default": {DSN: dsn, Driver: "mysql"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return New(
 		"user",
 		ColumnHook(CommaInt("role_ids"), Json("profile")),
 		ColumnValidator(
@@ -60,6 +64,7 @@ type Profile struct {
 }
 
 func Test_Insert(t *testing.T) {
+	m := mysqlModel(t)
 	u := map[string]any{
 		"name": "Seiya",
 		"profile": map[string]any{
@@ -77,6 +82,7 @@ func Test_Insert(t *testing.T) {
 }
 
 func Test_Select(t *testing.T) {
+	m := mysqlModel(t)
 	var result []*User
 	err := m.Select(WhereGe("id", 1)).Binding(&result)
 	assert.Equal(t, nil, err)
@@ -88,6 +94,7 @@ func Test_Select(t *testing.T) {
 }
 
 func Test_SelectOne(t *testing.T) {
+	m := mysqlModel(t)
 	var result *User
 	row := m.SelectOne(WhereEq("id", 1))
 	err := row.Binding(&result)
@@ -101,6 +108,7 @@ func Test_SelectOne(t *testing.T) {
 }
 
 func Test_Update(t *testing.T) {
+	m := mysqlModel(t)
 	//result, err := m.Update(User{
 	//	ID:   1,
 	//	Name: "星矢",
@@ -139,11 +147,13 @@ func Test_Update(t *testing.T) {
 }
 
 func Test_Delete(t *testing.T) {
+	m := mysqlModel(t)
 	_, err := m.Delete(WhereEq("id", 1))
 	assert.Equal(t, nil, err)
 }
 
 func Test_Count(t *testing.T) {
+	m := mysqlModel(t)
 	count, err := m.Count()
 	assert.Equal(t, nil, err)
 	assert.Equal(t, int64(0), count)

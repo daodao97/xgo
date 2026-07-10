@@ -50,6 +50,9 @@ err := xdb.Init(map[string]*xdb.Config{
     "default": {
         Driver: "mysql",
         DSN:    "user:password@tcp(localhost:3306)/dbname?parseTime=true",
+        // Init 默认使用 PingContext 校验连接，超时默认 5s。
+        // PingTimeout: 3 * time.Second,
+        // DisablePing: true, // 如需延迟连接可关闭启动校验
     },
 })
 
@@ -384,6 +387,13 @@ xdb.Init(map[string]*xdb.Config{
 
 // 使用指定连接
 m := xdb.New("users", xdb.WithConnection("analytics"))
+
+// 注入已有 *sql.DB 时，建议同时指定 driver/dialect
+m = xdb.New("users",
+    xdb.WithDB(db),
+    xdb.WithReadDB(readDB),
+    xdb.WithDriver("postgres"),
+)
 ```
 
 ## 读写分离
@@ -405,10 +415,56 @@ xdb.Init(map[string]*xdb.Config{
 
 ```go
 // 执行原始 SQL
-result, err := m.Exec("UPDATE users SET status = ? WHERE id = ?", 1, 100)
+result, err := m.Ctx(ctx).Exec("UPDATE users SET status = ? WHERE id = ?", 1, 100)
 
 // 查询原始 SQL
-rows, err := m.Query("SELECT * FROM users WHERE status = ?", 1)
+rows, err := m.Ctx(ctx).Query("SELECT * FROM users WHERE status = ?", 1)
+
+// 查询单行
+var name string
+err := m.Ctx(ctx).QueryRow("SELECT name FROM users WHERE id = ?", 1).Scan(&name)
+
+// 原始 SQL 也会按当前方言转换占位符；配置读库时 Query 自动使用读库，
+// 事务中的 Query/Exec 会自动复用当前事务。
+// PostgreSQL 等方言中如需保留字面量 ?（例如 JSONB ? 操作符），写成 ??。
+```
+
+## 标识符兼容
+
+Model 生成的 SQL 会按当前方言自动引用简单标识符：
+
+```go
+xdb.New("users", xdb.WithDriver("postgres")).Update(xdb.Record{
+    "id":   1,
+    "name": "Alice",
+})
+// update "users" set "name" = $1 where "id" = $2
+```
+
+复杂表达式保持原样；需要数据库特有函数或表达式时使用 `FieldRaw()`、`WhereRaw()` 或 `WhereRawArgs()`。
+Record/map 字段会按字段名排序后生成 SQL，避免不同运行之间 INSERT/UPSERT 字段顺序随机变化。
+
+如需更严格的结构化标识符校验，可开启：
+
+```go
+m := xdb.New("users",
+    xdb.WithDriver("postgres"),
+    xdb.WithStrictIdentifier(),
+)
+```
+
+开启后，结构化 API 中的表名、字段名、排序和分组字段必须是简单标识符或点号路径；复杂 SQL 表达式应显式使用 `FieldRaw()`、`WhereRaw()` 或 `WhereRawArgs()`。
+
+## 事务选项
+
+```go
+err := m.TransactionWithOptions(&sql.TxOptions{
+    Isolation: sql.LevelSerializable,
+    ReadOnly:  true,
+}, func(tx *sql.Tx, txModel xdb.Model) error {
+    _, err := txModel.Exec("UPDATE users SET status = ? WHERE id = ?", 1, 100)
+    return err
+})
 ```
 
 ## 方言接口
@@ -428,7 +484,12 @@ type Dialect interface {
            primaryKey string, updateFields []string) (sql string, needExtraValues bool)
     LimitOffset(limit, offset int) string
 }
+
+xdb.RegisterDialect("custom", myCustomDialect)
+m := xdb.New("users", xdb.WithDriver("custom"))
 ```
+
+自定义方言可额外实现 `QuoteIdentifier(identifier string) string`；Model 生成 SQL 时会自动使用它引用简单表名、字段名、排序和分组字段。若数据库不支持默认的 `for update`，可额外实现 `ForUpdate() string` 并返回对应片段或空字符串。
 
 ## 注意事项
 
