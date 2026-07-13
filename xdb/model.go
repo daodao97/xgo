@@ -1017,7 +1017,10 @@ func (m *model) validateOptionsIdentifiers(opts *Options) error {
 		}
 	}
 	for _, field := range opts.orderBy {
-		if err := validateOrderIdentifier(field); err != nil {
+		if field.raw {
+			continue
+		}
+		if err := validateOrderIdentifier(field.sql); err != nil {
 			return err
 		}
 	}

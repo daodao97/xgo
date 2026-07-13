@@ -13,13 +13,19 @@ const deleteMod = "delete from %s"
 
 type Option = func(opts *Options)
 
+type sqlFragment struct {
+	sql  string
+	args []any
+	raw  bool
+}
+
 type Options struct {
 	database  string
 	table     string
 	field     []string
 	rawField  map[string]bool
 	where     []where
-	orderBy   []string
+	orderBy   []sqlFragment
 	groupBy   string
 	limit     int
 	offset    int
@@ -486,14 +492,40 @@ func WhereOrFindInSet(field string, value any) Option {
 
 func OrderByDesc(field string) Option {
 	return func(opts *Options) {
-		opts.orderBy = append(opts.orderBy, field+" desc")
+		opts.orderBy = append(opts.orderBy, sqlFragment{sql: field + " desc"})
 	}
 }
 
 func OrderByAsc(field string) Option {
 	return func(opts *Options) {
-		opts.orderBy = append(opts.orderBy, field+" asc")
+		opts.orderBy = append(opts.orderBy, sqlFragment{sql: field + " asc"})
 	}
+}
+
+// OrderByRaw appends a raw ORDER BY expression with bound arguments.
+// raw must be trusted application SQL; dynamic values belong in args.
+// Placeholder mismatches are reported by the database driver at execution time.
+func OrderByRaw(raw string, args ...any) Option {
+	return func(opts *Options) {
+		opts.orderBy = append(opts.orderBy, sqlFragment{
+			sql:  raw,
+			args: args,
+			raw:  true,
+		})
+	}
+}
+
+func orderByBuilder(dialect Dialect, orderBy []sqlFragment) (sql string, args []any) {
+	expressions := make([]string, 0, len(orderBy))
+	for _, fragment := range orderBy {
+		expression := fragment.sql
+		if !fragment.raw {
+			expression = quoteOrderItem(dialect, expression)
+		}
+		expressions = append(expressions, expression)
+		args = append(args, fragment.args...)
+	}
+	return strings.Join(expressions, ", "), args
 }
 
 func GroupBy(field string) Option {
@@ -567,14 +599,6 @@ func quoteIdentifierList(dialect Dialect, identifiers string) string {
 		parts[i] = quoteAliasedIdentifier(dialect, strings.TrimSpace(part))
 	}
 	return strings.Join(parts, ", ")
-}
-
-func quoteOrderBy(dialect Dialect, orderBy []string) string {
-	quoted := make([]string, 0, len(orderBy))
-	for _, order := range orderBy {
-		quoted = append(quoted, quoteOrderItem(dialect, order))
-	}
-	return strings.Join(quoted, ", ")
 }
 
 func quoteOrderItem(dialect Dialect, order string) string {
@@ -768,7 +792,9 @@ func SelectBuilderWithDialect(dialect Dialect, opts ...Option) (sql string, args
 	}
 
 	if len(_opts.orderBy) > 0 {
-		sql = sql + " order by " + quoteOrderBy(dialect, _opts.orderBy)
+		_orderBy, _args := orderByBuilder(dialect, _opts.orderBy)
+		sql = sql + " order by " + _orderBy
+		args = append(args, _args...)
 	}
 
 	if _opts.limit != 0 {
