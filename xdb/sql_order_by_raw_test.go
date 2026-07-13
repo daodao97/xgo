@@ -79,6 +79,52 @@ func TestOrderByRawPostgreSQLPlaceholderOrder(t *testing.T) {
 	assert.Equal(t, []any{"bread", int64(42), 1, 0, 10, 0}, args)
 }
 
+func TestOrderByRawWithDialectQuotesOnlyStructuredItems(t *testing.T) {
+	sql, args := SelectBuilderWithDialect(
+		&MySQLDialect{},
+		table("dough"),
+		WhereEq("type", "bread"),
+		OrderByDesc("created_at"),
+		OrderByRaw("MATCH(title,description,summary) AGAINST(? IN NATURAL LANGUAGE MODE) DESC", "keyword"),
+		Limit(20),
+	)
+
+	assert.Equal(t,
+		"select * from `dough` where `type` = ? order by `created_at` desc, MATCH(title,description,summary) AGAINST(? IN NATURAL LANGUAGE MODE) DESC limit ? offset ?",
+		sql,
+	)
+	assert.Equal(t, []any{"bread", "keyword", 20, 0}, args)
+}
+
+func TestOrderByRawIsAllowedByStrictIdentifierValidation(t *testing.T) {
+	opts := &Options{}
+	for _, opt := range []Option{
+		table("dough"),
+		OrderByDesc("created_at"),
+		OrderByRaw("MATCH(title) AGAINST(?) DESC", "keyword"),
+	} {
+		opt(opts)
+	}
+
+	err := (&model{strictIdentifier: true}).validateOptionsIdentifiers(opts)
+
+	assert.NoError(t, err)
+}
+
+func TestStructuredOrderByStillUsesStrictIdentifierValidation(t *testing.T) {
+	opts := &Options{}
+	for _, opt := range []Option{
+		table("dough"),
+		OrderByDesc("created_at; drop table dough"),
+	} {
+		opt(opts)
+	}
+
+	err := (&model{strictIdentifier: true}).validateOptionsIdentifiers(opts)
+
+	assert.ErrorIs(t, err, ErrInvalidIdentifier)
+}
+
 func TestOrderByRawArgumentsDoNotLeakIntoMutationBuilders(t *testing.T) {
 	insertSQL, insertArgs := InsertBuilder(
 		table("dough"),

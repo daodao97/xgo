@@ -48,6 +48,12 @@ func TestMySQLDialect(t *testing.T) {
 		assert.Equal(t, sql, dialect.ConvertPlaceholders(sql))
 	})
 
+	t.Run("QuoteIdentifier", func(t *testing.T) {
+		assert.Equal(t, "`users`", dialect.QuoteIdentifier("users"))
+		assert.Equal(t, "`db`.`users`", dialect.QuoteIdentifier("db.users"))
+		assert.Equal(t, "`users`.*", dialect.QuoteIdentifier("users.*"))
+	})
+
 	t.Run("InsertReturning", func(t *testing.T) {
 		sql := "INSERT INTO users (name) VALUES (?)"
 		assert.Equal(t, sql, dialect.InsertReturning(sql, "id"))
@@ -90,6 +96,18 @@ func TestPostgreSQLDialect(t *testing.T) {
 		assert.Equal(t, expected, dialect.ConvertPlaceholders(sql))
 	})
 
+	t.Run("QuoteIdentifier", func(t *testing.T) {
+		assert.Equal(t, `"users"`, dialect.QuoteIdentifier("users"))
+		assert.Equal(t, `"public"."users"`, dialect.QuoteIdentifier("public.users"))
+		assert.Equal(t, `"users".*`, dialect.QuoteIdentifier("users.*"))
+	})
+
+	t.Run("ConvertPlaceholdersSkipsLiteralsAndComments", func(t *testing.T) {
+		sql := "SELECT '?' AS literal, col FROM users -- ? in comment\nWHERE meta ?? 'key' AND id = ? AND note = 'it''s ?'"
+		expected := "SELECT '?' AS literal, col FROM users -- ? in comment\nWHERE meta ? 'key' AND id = $1 AND note = 'it''s ?'"
+		assert.Equal(t, expected, dialect.ConvertPlaceholders(sql))
+	})
+
 	t.Run("InsertReturning", func(t *testing.T) {
 		sql := "INSERT INTO users (name) VALUES ($1)"
 		expected := "INSERT INTO users (name) VALUES ($1) RETURNING id"
@@ -109,6 +127,10 @@ func TestPostgreSQLDialect(t *testing.T) {
 		sql, needExtra := dialect.Upsert("users", []string{"id", "name", "email"}, "$1, $2, $3", "id", []string{"name", "email"})
 		assert.Equal(t, "INSERT INTO users (id, name, email) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email", sql)
 		assert.False(t, needExtra)
+	})
+
+	t.Run("ForUpdate", func(t *testing.T) {
+		assert.Equal(t, " for update", dialect.ForUpdate())
 	})
 }
 
@@ -132,6 +154,12 @@ func TestSQLiteDialect(t *testing.T) {
 		assert.Equal(t, sql, dialect.ConvertPlaceholders(sql))
 	})
 
+	t.Run("QuoteIdentifier", func(t *testing.T) {
+		assert.Equal(t, `"users"`, dialect.QuoteIdentifier("users"))
+		assert.Equal(t, `"main"."users"`, dialect.QuoteIdentifier("main.users"))
+		assert.Equal(t, `"users".*`, dialect.QuoteIdentifier("users.*"))
+	})
+
 	t.Run("SupportsLastInsertId", func(t *testing.T) {
 		assert.True(t, dialect.SupportsLastInsertId())
 	})
@@ -146,6 +174,55 @@ func TestSQLiteDialect(t *testing.T) {
 		assert.Equal(t, "INSERT INTO users (id, name, email) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET name = excluded.name, email = excluded.email", sql)
 		assert.False(t, needExtra)
 	})
+
+	t.Run("ForUpdate", func(t *testing.T) {
+		assert.Equal(t, "", dialect.ForUpdate())
+	})
+}
+
+type customDialect struct {
+	MySQLDialect
+}
+
+func (d *customDialect) Name() string {
+	return "custom"
+}
+
+type legacyDialect struct{}
+
+var _ Dialect = (*legacyDialect)(nil)
+
+func (d *legacyDialect) Name() string { return "legacy" }
+
+func (d *legacyDialect) Placeholder(index int) string { return "?" }
+
+func (d *legacyDialect) Placeholders(count int) string {
+	return (&MySQLDialect{}).Placeholders(count)
+}
+
+func (d *legacyDialect) ConvertPlaceholders(sql string) string { return sql }
+
+func (d *legacyDialect) InsertReturning(sql string, primaryKey string) string { return sql }
+
+func (d *legacyDialect) SupportsLastInsertId() bool { return true }
+
+func (d *legacyDialect) InsertIgnore(table string, fields []string, placeholders string) string {
+	return (&MySQLDialect{}).InsertIgnore(table, fields, placeholders)
+}
+
+func (d *legacyDialect) Upsert(table string, fields []string, placeholders string, primaryKey string, updateFields []string) (string, bool) {
+	return (&MySQLDialect{}).Upsert(table, fields, placeholders, primaryKey, updateFields)
+}
+
+func (d *legacyDialect) LimitOffset(limit, offset int) string {
+	return (&MySQLDialect{}).LimitOffset(limit, offset)
+}
+
+func TestRegisterDialect(t *testing.T) {
+	dialect := &customDialect{}
+	RegisterDialect("customdb", dialect)
+	assert.Same(t, dialect, GetDialect("customdb"))
+	assert.Equal(t, "mysql", GetDialect("unknown_driver").Name())
 }
 
 func TestIsPostgres(t *testing.T) {

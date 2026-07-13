@@ -40,6 +40,7 @@ func init() {
 }
 
 func TestModel_FindBy(t *testing.T) {
+	m := mysqlModel(t)
 	var u User
 	err := m.FindBy("1").Binding(&u)
 	assert.Equal(t, nil, err)
@@ -50,6 +51,7 @@ func TestModel_FindBy(t *testing.T) {
 }
 
 func TestModel_UpdateBy(t *testing.T) {
+	m := mysqlModel(t)
 	_, err := m.UpdateBy("1", map[string]any{
 		"name": "圣斗士-星矢",
 		"profile": map[string]any{

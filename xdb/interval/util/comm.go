@@ -1,7 +1,7 @@
 package util
 
 import (
-	"github.com/muhammadmuzzammil1998/jsonc"
+	"github.com/daodao97/xgo/internal/jsonc"
 	"github.com/pkg/errors"
 )
 

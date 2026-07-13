@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 )
 
 var ErrNotFound = errors.New("record not found")
+var ErrInvalidIdentifier = errors.New("invalid identifier")
 
 type Model interface {
 	PrimaryKey() string
@@ -33,10 +35,12 @@ type Model interface {
 	Delete(opt ...Option) (ok bool, err error)
 	Exec(query string, args ...any) (sql.Result, error)
 	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
 	FindById(id string) (Record, error)
 	FindByField(field string, val string) (Record, error)
 	UpdateBy(id string, record Record) (bool, error)
 	Transaction(fn func(*sql.Tx, Model) error) error
+	TransactionWithOptions(opts *sql.TxOptions, fn func(*sql.Tx, Model) error) error
 	Ctx(ctx context.Context) Model
 	Tx(tx *sql.Tx) Model
 	ClearCache() Model
@@ -53,28 +57,29 @@ type Model interface {
 }
 
 type model struct {
-	connection      string
-	database        string
-	table           string
-	tableFunc       func() string
-	fakeDelKey      string
-	deletedAtKey    string
-	primaryKey      string
-	cacheKey        []string
-	columnHook      map[string]HookData
-	columnValidator []Valid
-	hasOne          []HasOpts
-	hasMany         []HasOpts
-	client          *sql.DB
-	readClient      *sql.DB
-	config          *Config
-	dialect         Dialect
-	saveZero        bool
-	enableValidator bool
-	err             error
-	ctx             context.Context
-	tx              *sql.Tx
-	clearCache      bool
+	connection       string
+	database         string
+	table            string
+	tableFunc        func() string
+	fakeDelKey       string
+	deletedAtKey     string
+	primaryKey       string
+	cacheKey         []string
+	columnHook       map[string]HookData
+	columnValidator  []Valid
+	hasOne           []HasOpts
+	hasMany          []HasOpts
+	client           *sql.DB
+	readClient       *sql.DB
+	config           *Config
+	dialect          Dialect
+	saveZero         bool
+	enableValidator  bool
+	err              error
+	ctx              context.Context
+	tx               *sql.Tx
+	clearCache       bool
+	strictIdentifier bool
 }
 
 func New(table string, baseOpt ...With) Model {
@@ -122,7 +127,11 @@ func New(table string, baseOpt ...With) Model {
 }
 
 func (m *model) Transaction(fn func(*sql.Tx, Model) error) error {
-	tx, err := m.client.Begin()
+	return m.TransactionWithOptions(nil, fn)
+}
+
+func (m *model) TransactionWithOptions(opts *sql.TxOptions, fn func(*sql.Tx, Model) error) error {
+	tx, err := m.client.BeginTx(sqlContext(m.ctx), opts)
 	if err != nil {
 		return err
 	}
@@ -143,27 +152,28 @@ func (m *model) Transaction(fn func(*sql.Tx, Model) error) error {
 
 func (m *model) Tx(tx *sql.Tx) Model {
 	newModel := &model{
-		connection:      m.connection,
-		database:        m.database,
-		table:           m.table,
-		fakeDelKey:      m.fakeDelKey,
-		deletedAtKey:    m.deletedAtKey,
-		primaryKey:      m.primaryKey,
-		cacheKey:        m.cacheKey,
-		columnHook:      m.columnHook,
-		columnValidator: m.columnValidator,
-		hasOne:          m.hasOne,
-		hasMany:         m.hasMany,
-		client:          m.client,
-		readClient:      m.readClient,
-		config:          m.config,
-		saveZero:        m.saveZero,
-		enableValidator: m.enableValidator,
-		err:             m.err,
-		ctx:             m.ctx,
-		tx:              tx, // 设置新的事务
-		clearCache:      m.clearCache,
-		dialect:         m.dialect,
+		connection:       m.connection,
+		database:         m.database,
+		table:            m.table,
+		fakeDelKey:       m.fakeDelKey,
+		deletedAtKey:     m.deletedAtKey,
+		primaryKey:       m.primaryKey,
+		cacheKey:         m.cacheKey,
+		columnHook:       m.columnHook,
+		columnValidator:  m.columnValidator,
+		hasOne:           m.hasOne,
+		hasMany:          m.hasMany,
+		client:           m.client,
+		readClient:       m.readClient,
+		config:           m.config,
+		saveZero:         m.saveZero,
+		enableValidator:  m.enableValidator,
+		err:              m.err,
+		ctx:              m.ctx,
+		tx:               tx, // 设置新的事务
+		clearCache:       m.clearCache,
+		dialect:          m.dialect,
+		strictIdentifier: m.strictIdentifier,
 	}
 	return newModel
 }
@@ -193,8 +203,11 @@ func (m *model) Select(opt ...Option) (rows *Rows) {
 	for _, o := range opt {
 		o(opts)
 	}
+	if err = m.validateOptionsIdentifiers(opts); err != nil {
+		return &Rows{Err: err}
+	}
 
-	_sql, args := SelectBuilder(opt...)
+	_sql, args := SelectBuilderWithDialect(m.dialect, opt...)
 
 	// 使用方言转换占位符
 	_sql = m.dialect.ConvertPlaceholders(_sql)
@@ -208,9 +221,9 @@ func (m *model) Select(opt ...Option) (rows *Rows) {
 
 	var res []Row
 	if m.tx != nil {
-		res, err = queryTx(m.tx, _sql, args...)
+		res, err = queryTxContext(m.ctx, m.tx, _sql, args...)
 	} else {
-		res, err = query(client, _sql, args...)
+		res, err = queryContext(m.ctx, client, _sql, args...)
 	}
 	if err != nil {
 		return &Rows{Err: err}
@@ -408,7 +421,10 @@ func (m *model) Insert(record Record) (lastId int64, err error) {
 	// }
 
 	ks, vs := m.recordToKV(_record)
-	_sql, args := InsertBuilder(table(m.getTableName()), Field(ks...), Value(vs...))
+	if err = m.validateIdentifiers(append([]string{m.getTableName()}, ks...)...); err != nil {
+		return 0, err
+	}
+	_sql, args := InsertBuilderWithDialect(m.dialect, table(m.getTableName()), Field(ks...), Value(vs...))
 
 	// 使用方言转换占位符
 	_sql = m.dialect.ConvertPlaceholders(_sql)
@@ -417,20 +433,20 @@ func (m *model) Insert(record Record) (lastId int64, err error) {
 
 	// PostgreSQL 不支持 LastInsertId，使用 RETURNING
 	if !m.dialect.SupportsLastInsertId() {
-		_sql = m.dialect.InsertReturning(_sql, m.primaryKey)
+		_sql = m.dialect.InsertReturning(_sql, quoteIdentifier(m.dialect, m.primaryKey))
 		if m.tx != nil {
-			err = m.tx.QueryRow(_sql, args...).Scan(&lastId)
+			err = m.tx.QueryRowContext(sqlContext(m.ctx), _sql, args...).Scan(&lastId)
 		} else {
-			err = m.client.QueryRow(_sql, args...).Scan(&lastId)
+			err = m.client.QueryRowContext(sqlContext(m.ctx), _sql, args...).Scan(&lastId)
 		}
 		return lastId, err
 	}
 
 	var res sql.Result
 	if m.tx != nil {
-		res, err = execTx(m.tx, _sql, args...)
+		res, err = execTxContext(m.ctx, m.tx, _sql, args...)
 	} else {
-		res, err = exec(m.client, _sql, args...)
+		res, err = execContext(m.ctx, m.client, _sql, args...)
 	}
 	if err != nil {
 		return 0, err
@@ -465,6 +481,10 @@ func (m *model) InsertBatch(records []Record) (lastId int64, err error) {
 		if field != m.primaryKey {
 			fields = append(fields, field)
 		}
+	}
+	sort.Strings(fields)
+	if err = m.validateIdentifiers(append([]string{m.getTableName()}, fields...)...); err != nil {
+		return 0, err
 	}
 
 	var values []any
@@ -506,8 +526,8 @@ func (m *model) InsertBatch(records []Record) (lastId int64, err error) {
 	}
 
 	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES %s",
-		m.getTableName(),
-		strings.Join(fields, ","),
+		quoteIdentifier(m.dialect, m.getTableName()),
+		quoteIdentifierList(m.dialect, strings.Join(fields, ",")),
 		strings.Join(placeholders, ","))
 
 	// 使用方言转换占位符
@@ -517,20 +537,20 @@ func (m *model) InsertBatch(records []Record) (lastId int64, err error) {
 
 	// PostgreSQL 不支持 LastInsertId，使用 RETURNING 获取第一个插入的 ID
 	if !m.dialect.SupportsLastInsertId() {
-		query = m.dialect.InsertReturning(query, m.primaryKey)
+		query = m.dialect.InsertReturning(query, quoteIdentifier(m.dialect, m.primaryKey))
 		if m.tx != nil {
-			err = m.tx.QueryRow(query, values...).Scan(&lastId)
+			err = m.tx.QueryRowContext(sqlContext(m.ctx), query, values...).Scan(&lastId)
 		} else {
-			err = m.client.QueryRow(query, values...).Scan(&lastId)
+			err = m.client.QueryRowContext(sqlContext(m.ctx), query, values...).Scan(&lastId)
 		}
 		return lastId, err
 	}
 
 	var result sql.Result
 	if m.tx != nil {
-		result, err = execTx(m.tx, query, values...)
+		result, err = execTxContext(m.ctx, m.tx, query, values...)
 	} else {
-		result, err = exec(m.client, query, values...)
+		result, err = execContext(m.ctx, m.client, query, values...)
 	}
 	if err != nil {
 		return 0, err
@@ -578,8 +598,15 @@ func (m *model) Update(record Record, opt ...Option) (ok bool, err error) {
 
 	ks, vs := m.recordToKV(_record)
 	opt = append(opt, table(m.getTableName()), Field(ks...), Value(vs...))
+	opts := new(Options)
+	for _, o := range opt {
+		o(opts)
+	}
+	if err = m.validateOptionsIdentifiers(opts); err != nil {
+		return false, err
+	}
 
-	_sql, args := UpdateBuilder(opt...)
+	_sql, args := UpdateBuilderWithDialect(m.dialect, opt...)
 
 	// 使用方言转换占位符
 	_sql = m.dialect.ConvertPlaceholders(_sql)
@@ -588,9 +615,9 @@ func (m *model) Update(record Record, opt ...Option) (ok bool, err error) {
 
 	var result sql.Result
 	if m.tx != nil {
-		result, err = execTx(m.tx, _sql, args...)
+		result, err = execTxContext(m.ctx, m.tx, _sql, args...)
 	} else {
-		result, err = exec(m.client, _sql, args...)
+		result, err = execContext(m.ctx, m.client, _sql, args...)
 	}
 	if err != nil {
 		return false, err
@@ -626,9 +653,13 @@ func (m *model) InsertOrUpdate(record Record, updateFields ...string) (affected 
 	// 准备插入的字段和值
 	var fields []string
 	var values []any
-	for field, value := range record {
+	for _, field := range sortedRecordKeys(record) {
+		value := record[field]
 		fields = append(fields, field)
 		values = append(values, value)
+	}
+	if err = m.validateIdentifiers(append([]string{m.getTableName()}, fields...)...); err != nil {
+		return 0, err
 	}
 
 	// 准备更新的字段（只需要字段名，不需要占位符格式）
@@ -651,10 +682,21 @@ func (m *model) InsertOrUpdate(record Record, updateFields ...string) (affected 
 			}
 		}
 	}
+	if err = m.validateIdentifiers(updateFieldNames...); err != nil {
+		return 0, err
+	}
 
 	// 使用方言构建 UPSERT SQL
+	quotedFields := quoteIdentifiers(m.dialect, fields)
+	quotedUpdateFieldNames := quoteIdentifiers(m.dialect, updateFieldNames)
 	placeholders := m.dialect.Placeholders(len(fields))
-	query, needExtraValues := m.dialect.Upsert(m.table, fields, placeholders, m.primaryKey, updateFieldNames)
+	query, needExtraValues := m.dialect.Upsert(
+		quoteIdentifier(m.dialect, m.getTableName()),
+		quotedFields,
+		placeholders,
+		quoteIdentifier(m.dialect, m.primaryKey),
+		quotedUpdateFieldNames,
+	)
 
 	// 根据方言决定是否需要额外的更新值
 	if needExtraValues {
@@ -671,9 +713,9 @@ func (m *model) InsertOrUpdate(record Record, updateFields ...string) (affected 
 	// 执行 SQL
 	var result sql.Result
 	if m.tx != nil {
-		result, err = execTx(m.tx, query, values...)
+		result, err = execTxContext(m.ctx, m.tx, query, values...)
 	} else {
-		result, err = exec(m.client, query, values...)
+		result, err = execContext(m.ctx, m.client, query, values...)
 	}
 	if err != nil {
 		return 0, err
@@ -725,14 +767,20 @@ func (m *model) InsertIgnore(record Record) (affected int64, err error) {
 	// 准备插入的字段和值
 	var fields []string
 	var values []any
-	for field, value := range record {
+	for _, field := range sortedRecordKeys(record) {
+		value := record[field]
 		fields = append(fields, field)
 		values = append(values, value)
+	}
+	if err = m.validateIdentifiers(append([]string{m.getTableName()}, fields...)...); err != nil {
+		return 0, err
 	}
 
 	// 使用方言构建 INSERT IGNORE SQL
 	placeholders := m.dialect.Placeholders(len(fields))
-	query := m.dialect.InsertIgnore(m.table, fields, placeholders)
+	quotedTable := quoteIdentifier(m.dialect, m.getTableName())
+	quotedFields := quoteIdentifiers(m.dialect, fields)
+	query := m.dialect.InsertIgnore(quotedTable, quotedFields, placeholders)
 
 	values = parseSetValues(values)
 
@@ -744,9 +792,9 @@ func (m *model) InsertIgnore(record Record) (affected int64, err error) {
 	// 执行 SQL
 	var result sql.Result
 	if m.tx != nil {
-		result, err = execTx(m.tx, query, values...)
+		result, err = execTxContext(m.ctx, m.tx, query, values...)
 	} else {
-		result, err = exec(m.client, query, values...)
+		result, err = execContext(m.ctx, m.client, query, values...)
 	}
 	if err != nil {
 		return 0, err
@@ -780,8 +828,15 @@ func (m *model) Delete(opt ...Option) (ok bool, err error) {
 
 	var kv []any
 	defer dbLog(m.ctx, "Delete", time.Now(), &err, &kv)
+	opts := new(Options)
+	for _, o := range opt {
+		o(opts)
+	}
+	if err = m.validateOptionsIdentifiers(opts); err != nil {
+		return false, err
+	}
 
-	_sql, args := DeleteBuilder(opt...)
+	_sql, args := DeleteBuilderWithDialect(m.dialect, opt...)
 
 	// 使用方言转换占位符
 	_sql = m.dialect.ConvertPlaceholders(_sql)
@@ -790,9 +845,9 @@ func (m *model) Delete(opt ...Option) (ok bool, err error) {
 
 	var result sql.Result
 	if m.tx != nil {
-		result, err = execTx(m.tx, _sql, args...)
+		result, err = execTxContext(m.ctx, m.tx, _sql, args...)
 	} else {
-		result, err = exec(m.client, _sql, args...)
+		result, err = execContext(m.ctx, m.client, _sql, args...)
 	}
 	if err != nil {
 		return false, err
@@ -876,15 +931,38 @@ func (m *model) DelCache(opt ...Option) {
 }
 
 func (m *model) Exec(query string, args ...any) (res sql.Result, err error) {
-	defer dbLog(m.ctx, "Exec", time.Now(), &err, &args)
+	var kv []any
+	defer dbLog(m.ctx, "Exec", time.Now(), &err, &kv)
+	query = m.dialect.ConvertPlaceholders(query)
+	kv = append(kv, "sql", query, "args", args)
 	if m.tx != nil {
-		return execTx(m.tx, query, args...)
+		return execTxContext(m.ctx, m.tx, query, args...)
 	}
-	return m.client.Exec(query, args...)
+	return execContext(m.ctx, m.client, query, args...)
 }
 
 func (m *model) Query(query string, args ...any) (*sql.Rows, error) {
-	return m.client.Query(query, args...)
+	query = m.dialect.ConvertPlaceholders(query)
+	if m.tx != nil {
+		return m.tx.QueryContext(sqlContext(m.ctx), query, args...)
+	}
+	client := m.client
+	if m.readClient != nil {
+		client = m.readClient
+	}
+	return client.QueryContext(sqlContext(m.ctx), query, args...)
+}
+
+func (m *model) QueryRow(query string, args ...any) *sql.Row {
+	query = m.dialect.ConvertPlaceholders(query)
+	if m.tx != nil {
+		return m.tx.QueryRowContext(sqlContext(m.ctx), query, args...)
+	}
+	client := m.client
+	if m.readClient != nil {
+		client = m.readClient
+	}
+	return client.QueryRowContext(sqlContext(m.ctx), query, args...)
 }
 
 func (m *model) hookInput(record map[string]any) (map[string]any, error) {
@@ -903,12 +981,69 @@ func (m *model) hookInput(record map[string]any) (map[string]any, error) {
 }
 
 func (m *model) recordToKV(record map[string]any) (ks []string, vs []any) {
-	for k, v := range record {
+	for _, k := range sortedRecordKeys(record) {
 		ks = append(ks, k)
-		vs = append(vs, v)
+		vs = append(vs, record[k])
 	}
 
 	return ks, vs
+}
+
+func sortedRecordKeys(record map[string]any) []string {
+	keys := make([]string, 0, len(record))
+	for k := range record {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func (m *model) validateOptionsIdentifiers(opts *Options) error {
+	if !m.strictIdentifier {
+		return nil
+	}
+	if err := validateIdentifier(opts.database); err != nil {
+		return err
+	}
+	if err := validateIdentifier(opts.table); err != nil {
+		return err
+	}
+	for _, field := range opts.field {
+		if opts.rawField[field] {
+			continue
+		}
+		if err := validateAliasedIdentifier(field); err != nil {
+			return err
+		}
+	}
+	for _, field := range opts.orderBy {
+		if field.raw {
+			continue
+		}
+		if err := validateOrderIdentifier(field.sql); err != nil {
+			return err
+		}
+	}
+	if opts.groupBy != "" {
+		for _, field := range strings.Split(opts.groupBy, ",") {
+			if err := validateIdentifier(strings.TrimSpace(field)); err != nil {
+				return err
+			}
+		}
+	}
+	return validateWhereIdentifiers(opts.where)
+}
+
+func (m *model) validateIdentifiers(identifiers ...string) error {
+	if !m.strictIdentifier {
+		return nil
+	}
+	for _, identifier := range identifiers {
+		if err := validateIdentifier(identifier); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *model) getTableName() string {

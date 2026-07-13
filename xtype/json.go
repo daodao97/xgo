@@ -9,9 +9,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/daodao97/xgo/internal/jsonc"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/json-iterator/go/extra"
-	"github.com/muhammadmuzzammil1998/jsonc"
 	"github.com/pkg/errors"
 	"github.com/spf13/cast"
 	"github.com/tidwall/gjson"

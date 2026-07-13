@@ -1,6 +1,7 @@
 package xdb
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"sync"
@@ -18,6 +19,10 @@ type Config struct {
 	MaxIdleConn     int           `json:"max_idle_conn" yaml:"max_idle_conn"`
 	ConnMaxIdleTime time.Duration `json:"conn_max_idle_time" yaml:"conn_max_idle_time"`
 	ConnMaxLifetime time.Duration `json:"conn_max_lifetime" yaml:"conn_max_lifetime"`
+	// PingTimeout controls the startup PingContext timeout. Defaults to 5s.
+	PingTimeout time.Duration `json:"ping_timeout" yaml:"ping_timeout"`
+	// DisablePing keeps Init lazy for databases that may not be reachable at startup.
+	DisablePing bool `json:"disable_ping" yaml:"disable_ping"`
 }
 
 var pool = sync.Map{}
@@ -55,6 +60,8 @@ func Init(conns map[string]*Config) error {
 				MaxIdleConn:     conf.MaxIdleConn,
 				ConnMaxIdleTime: conf.ConnMaxIdleTime,
 				ConnMaxLifetime: conf.ConnMaxLifetime,
+				PingTimeout:     conf.PingTimeout,
+				DisablePing:     conf.DisablePing,
 			})
 			if err != nil {
 				return err
@@ -67,8 +74,10 @@ func Init(conns map[string]*Config) error {
 
 func Close() {
 	pool.Range(func(key, value any) bool {
-		db := value.(*sql.DB)
-		_ = db.Close()
+		if p, ok := value.(*DbPool); ok && p.db != nil {
+			_ = p.db.Close()
+		}
+		pool.Delete(key)
 		return true
 	})
 }
@@ -125,6 +134,20 @@ func NewDb(conf *Config) (*DbPool, error) {
 	if conf.ConnMaxLifetime > 0 {
 		db.SetConnMaxLifetime(conf.ConnMaxLifetime)
 	}
+
+	if !conf.DisablePing {
+		timeout := conf.PingTimeout
+		if timeout <= 0 {
+			timeout = 5 * time.Second
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		if err := db.PingContext(ctx); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("ping database: %w", err)
+		}
+	}
+
 	return &DbPool{
 		db:      db,
 		conf:    conf,

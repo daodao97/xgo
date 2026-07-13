@@ -42,7 +42,7 @@ func (m *model) FindBy(id string) *Row {
 	findByLogPrefix := fmt.Sprintf("%s FindBy", m.table)
 
 	if cache == nil {
-		return &Row{Err: errors.New("cache instance is nil")}
+		return m.SelectOne(WhereEq(m.PrimaryKey(), id))
 	}
 
 	pk := m.PrimaryKey()
@@ -90,12 +90,12 @@ func (m *model) FindBy(id string) *Row {
 }
 
 func (m *model) UpdateBy(id string, record Record) (bool, error) {
-	if cache == nil {
-		return false, errors.New("cache instance is nil")
-	}
 	_, err := m.Update(record, WhereEq("id", id))
 	if err != nil {
 		return false, err
+	}
+	if cache == nil {
+		return true, nil
 	}
 	key := m.cacheKeyPrefix(id)
 	err = cache.Del(m.cacheCtx(), key)
@@ -120,7 +120,7 @@ func (m *model) FindByKey(key string, val string) *Row {
 	findByKeyLogPrefix := fmt.Sprintf("%s FindByKey", m.table)
 
 	if cache == nil {
-		return &Row{Err: errors.New("cache instance is nil")}
+		return m.SelectOne(WhereEq(key, val))
 	}
 
 	pk := m.PrimaryKey()
