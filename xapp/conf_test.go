@@ -84,6 +84,34 @@ func TestInitConfClosesPreviousWatcherOnReinit(t *testing.T) {
 	}
 }
 
+func TestFileConfEnvironmentOverridesYAMLByFieldName(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFile(t, filepath.Join(tempDir, "conf.yaml"), "server_addr: 127.0.0.1:4001\nport: 4001\n")
+	t.Setenv("SERVER_ADDR", "0.0.0.0:8080")
+	t.Setenv("PORT", "8080")
+
+	originalConfDir := confDir
+	confDir = []string{tempDir}
+	defer func() {
+		confDir = originalConfDir
+	}()
+
+	var conf struct {
+		ServerAddr string `yaml:"server_addr"`
+		Port       int    `yaml:"port"`
+	}
+
+	if _, err := fileConf(&conf, "conf.yaml"); err != nil {
+		t.Fatalf("fileConf failed: %v", err)
+	}
+	if conf.ServerAddr != "0.0.0.0:8080" {
+		t.Fatalf("expected environment to override server_addr, got %q", conf.ServerAddr)
+	}
+	if conf.Port != 8080 {
+		t.Fatalf("expected environment to override port, got %d", conf.Port)
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {

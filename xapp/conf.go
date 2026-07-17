@@ -78,8 +78,10 @@ func fileConf(dest any, files ...string) ([]string, error) {
 		}
 	}
 
-	// 处理环境变量替换
-	if err := env.Parse(dest); err != nil {
+	// 环境变量在配置文件之后解析，因此可以覆盖文件中的值。
+	// 未显式声明 env 标签时，默认使用转为大写蛇形命名的字段名，
+	// 例如 ServerAddr 对应 SERVER_ADDR。
+	if err := env.ParseWithOptions(dest, env.Options{UseFieldNameByDefault: true}); err != nil {
 		return nil, fmt.Errorf("处理环境变量失败: %v", err)
 	}
 

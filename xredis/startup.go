@@ -2,6 +2,7 @@ package xredis
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 type Options struct {
 	Name            string        `env:"NAME" yaml:"name"`
+	DSN             string        `env:"DSN" yaml:"dsn"`
 	Addr            string        `env:"ADDR" yaml:"addr"`
 	Password        string        `env:"PASSWORD" yaml:"password"`
 	DB              int           `env:"DB" yaml:"db"`
@@ -27,6 +29,39 @@ type Options struct {
 	IsCluster       bool     `env:"IS_CLUSTER" yaml:"is_cluster"`
 	ClusterAddrs    []string `env:"CLUSTER_ADDRS" yaml:"cluster_addrs"`
 	ClusterPassword string   `env:"CLUSTER_PASSWORD" yaml:"cluster_password"`
+}
+
+// RedisOptions converts the configuration into go-redis options.
+// When DSN is set, it is treated as the complete single-node configuration and
+// the individual connection fields are ignored. Supported schemes are redis,
+// rediss, and unix; query parameters are parsed by go-redis.
+func (o Options) RedisOptions() (*redis.Options, error) {
+	if o.DSN != "" {
+		if o.IsCluster {
+			return nil, fmt.Errorf("redis DSN is not supported in cluster mode")
+		}
+
+		opt, err := redis.ParseURL(o.DSN)
+		if err != nil {
+			return nil, fmt.Errorf("parse redis DSN: %w", err)
+		}
+		return opt, nil
+	}
+
+	return &redis.Options{
+		Addr:            o.Addr,
+		Password:        o.Password,
+		DB:              o.DB,
+		PoolSize:        o.PoolSize,
+		PoolTimeout:     o.PoolTimeout,
+		ReadTimeout:     o.ReadTimeout,
+		WriteTimeout:    o.WriteTimeout,
+		ConnMaxIdleTime: o.IdleTimeout,
+		MaxRetries:      o.MaxRetries,
+		MinRetryBackoff: o.MinRetryBackoff,
+		MaxRetryBackoff: o.MaxRetryBackoff,
+		DialTimeout:     o.DialTimeout,
+	}, nil
 }
 
 var client redis.UniversalClient
@@ -57,6 +92,10 @@ func Inits(conf []Options) error {
 		var c redis.UniversalClient
 		var err error
 
+		if conf.IsCluster && conf.DSN != "" {
+			return fmt.Errorf("redis DSN is not supported in cluster mode")
+		}
+
 		if conf.IsCluster {
 			addrs := conf.ClusterAddrs
 			if len(addrs) == 0 && conf.Addr != "" {
@@ -77,19 +116,9 @@ func Inits(conf []Options) error {
 			}
 			c = redis.NewClusterClient(clusterOpt)
 		} else {
-			opt := &redis.Options{
-				Addr:            conf.Addr,
-				Password:        conf.Password,
-				DB:              conf.DB,
-				PoolSize:        conf.PoolSize,
-				PoolTimeout:     conf.PoolTimeout,
-				ReadTimeout:     conf.ReadTimeout,
-				WriteTimeout:    conf.WriteTimeout,
-				ConnMaxIdleTime: conf.IdleTimeout,
-				MaxRetries:      conf.MaxRetries,
-				MinRetryBackoff: conf.MinRetryBackoff,
-				MaxRetryBackoff: conf.MaxRetryBackoff,
-				DialTimeout:     conf.DialTimeout,
+			opt, parseErr := conf.RedisOptions()
+			if parseErr != nil {
+				return parseErr
 			}
 			c = redis.NewClient(opt)
 		}
