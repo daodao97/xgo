@@ -107,7 +107,12 @@ func NewDb(conf *Config) (*DbPool, error) {
 		driver = "mysql"
 	}
 
-	db, err := sql.Open(driver, conf.DSN)
+	dsn, err := normalizeDatabaseDSN(driver, conf.DSN)
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := sql.Open(driver, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed Connection database: %s", err)
 	}
