@@ -1008,6 +1008,11 @@ func (m *model) validateOptionsIdentifiers(opts *Options) error {
 	if err := validateIdentifier(opts.table); err != nil {
 		return err
 	}
+	for _, index := range opts.forceIndex {
+		if err := validateForceIndexIdentifier(index); err != nil {
+			return err
+		}
+	}
 	for _, field := range opts.field {
 		if opts.rawField[field] {
 			continue
