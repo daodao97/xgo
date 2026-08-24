@@ -200,6 +200,24 @@ func TestRawQueryRowUsesReadDBAndDialect(t *testing.T) {
 	compatState.Unlock()
 }
 
+func TestModelSelectUsesForceIndex(t *testing.T) {
+	resetCompatState()
+	db, err := sql.Open(compatDriverName, "write")
+	require.NoError(t, err)
+	defer db.Close()
+
+	m := New("users", WithDB(db), WithDriver("mysql"))
+	records, err := m.Selects(ForceIndex("idx_users_status"), WhereEq("status", 1))
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+
+	compatState.Lock()
+	defer compatState.Unlock()
+	require.Equal(t, "select * from `users` force index (`idx_users_status`) where `status` = ?", compatState.querySQL)
+	require.Len(t, compatState.queryArgs, 1)
+	require.Equal(t, int64(1), compatState.queryArgs[0].Value)
+}
+
 func TestTransactionWithOptions(t *testing.T) {
 	resetCompatState()
 	db, err := sql.Open(compatDriverName, "write")

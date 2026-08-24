@@ -52,6 +52,23 @@ type forUpdateDialect interface {
 	ForUpdate() string
 }
 
+type forceIndexDialect interface {
+	ForceIndex(indexes []string) string
+}
+
+func forceIndexSQL(dialect Dialect, indexes []string) string {
+	if len(indexes) == 0 {
+		return ""
+	}
+	if dialect == nil {
+		return (&MySQLDialect{}).ForceIndex(indexes)
+	}
+	if d, ok := dialect.(forceIndexDialect); ok {
+		return d.ForceIndex(indexes)
+	}
+	return ""
+}
+
 func forUpdateSQL(dialect Dialect) string {
 	if dialect == nil {
 		return " for update"
@@ -217,6 +234,21 @@ func (d *MySQLDialect) ConvertPlaceholders(sql string) string {
 
 func (d *MySQLDialect) QuoteIdentifier(identifier string) string {
 	return quoteIdentifierWith(identifier, "`")
+}
+
+func quoteMySQLAtomicIdentifier(identifier string) string {
+	return "`" + strings.ReplaceAll(identifier, "`", "``") + "`"
+}
+
+func (d *MySQLDialect) ForceIndex(indexes []string) string {
+	if len(indexes) == 0 {
+		return ""
+	}
+	quoted := make([]string, len(indexes))
+	for i, index := range indexes {
+		quoted[i] = quoteMySQLAtomicIdentifier(index)
+	}
+	return " force index (" + strings.Join(quoted, ", ") + ")"
 }
 
 func (d *MySQLDialect) InsertReturning(sql string, primaryKey string) string {

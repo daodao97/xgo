@@ -20,17 +20,18 @@ type sqlFragment struct {
 }
 
 type Options struct {
-	database  string
-	table     string
-	field     []string
-	rawField  map[string]bool
-	where     []where
-	orderBy   []sqlFragment
-	groupBy   string
-	limit     int
-	offset    int
-	value     []any
-	forUpdate bool
+	database   string
+	table      string
+	field      []string
+	rawField   map[string]bool
+	where      []where
+	orderBy    []sqlFragment
+	groupBy    string
+	limit      int
+	offset     int
+	value      []any
+	forUpdate  bool
+	forceIndex []string
 }
 
 func table(table string) Option {
@@ -48,6 +49,14 @@ func database(database string) Option {
 func ForUpdate() Option {
 	return func(opts *Options) {
 		opts.forUpdate = true
+	}
+}
+
+// ForceIndex adds a MySQL-only optimization hint to SELECT queries.
+// Unsupported dialects omit the hint. Callers pass raw, unquoted index names.
+func ForceIndex(indexes ...string) Option {
+	return func(opts *Options) {
+		opts.forceIndex = append(opts.forceIndex, indexes...)
 	}
 }
 
@@ -654,6 +663,14 @@ func validateIdentifier(identifier string) error {
 	return nil
 }
 
+func validateForceIndexIdentifier(identifier string) error {
+	if identifier != strings.TrimSpace(identifier) || identifier == "" || identifier == "*" ||
+		strings.Contains(identifier, ".") || isQuotedIdentifier(identifier) {
+		return fmt.Errorf("%w: %s", ErrInvalidIdentifier, identifier)
+	}
+	return validateIdentifier(identifier)
+}
+
 func validateAliasedIdentifier(identifier string) error {
 	left, alias, ok := splitAlias(identifier)
 	if !ok {
@@ -781,7 +798,7 @@ func SelectBuilderWithDialect(dialect Dialect, opts ...Option) (sql string, args
 		_field = quoteSelectFieldsWithRaw(dialect, _opts.field, _opts.rawField)
 	}
 
-	sql = fmt.Sprintf(selectMod, _field, quoteTable(dialect, _opts))
+	sql = fmt.Sprintf(selectMod, _field, quoteTable(dialect, _opts)) + forceIndexSQL(dialect, _opts.forceIndex)
 
 	if _where != "" {
 		sql = sql + " where " + _where
