@@ -911,10 +911,11 @@ func UpdateBuilderWithDialect(dialect Dialect, opts ...Option) (sql string, args
 	}
 	var _set []string
 	for i, v := range _opts.field {
-		_set = append(_set, parseSetWithDialect(dialect, v, _opts.value[i]))
+		assignment, values := buildUpdateAssignment(dialect, v, _opts.value[i])
+		_set = append(_set, assignment)
+		args = append(args, values...)
 	}
 	sql = fmt.Sprintf(updateMod, quoteTable(dialect, _opts), strings.Join(_set, ","))
-	args = parseSetValues(_opts.value)
 	if len(_opts.where) > 0 {
 		_where, _args := whereBuilderWithDialect(dialect, _opts.where)
 		sql = sql + " where " + _where
@@ -991,4 +992,27 @@ func parseSetValue(value any) any {
 		return uv.Value
 	}
 	return value
+}
+
+// Expression is a SQL expression used as an UPDATE assignment value.
+// Construct values with Expr. Expressions are not supported by INSERT or UPSERT.
+type Expression struct {
+	sql  string
+	args []any
+}
+
+// Expr builds an UPDATE assignment expression with bound parameters.
+// The SQL fragment must be trusted SQL; pass dynamic values through args using
+// ? placeholders. Functions and identifiers inside the fragment are not rewritten.
+// Placeholder counts and SQL syntax are checked by the database driver/server.
+// Expression values skip column input hooks during Update; validators still run.
+func Expr(sql string, args ...any) Expression {
+	return Expression{sql: sql, args: args}
+}
+
+func buildUpdateAssignment(dialect Dialect, field string, value any) (string, []any) {
+	if expression, ok := value.(Expression); ok {
+		return quoteIdentifier(dialect, field) + " = " + expression.sql, expression.args
+	}
+	return parseSetWithDialect(dialect, field, value), []any{parseSetValue(value)}
 }
