@@ -577,7 +577,7 @@ func (m *model) Update(record Record, opt ...Option) (ok bool, err error) {
 		opt = append(opt, WhereEq(m.primaryKey, id))
 	}
 
-	_record, err = m.hookInput(_record)
+	_record, err = m.hookInputValues(_record, true)
 	if err != nil {
 		return false, err
 	}
@@ -966,9 +966,16 @@ func (m *model) QueryRow(query string, args ...any) *sql.Row {
 }
 
 func (m *model) hookInput(record map[string]any) (map[string]any, error) {
+	return m.hookInputValues(record, false)
+}
+
+func (m *model) hookInputValues(record map[string]any, skipExpressions bool) (map[string]any, error) {
 	for k, v := range m.columnHook {
 		for field, val := range record {
 			if k == field {
+				if _, ok := val.(Expression); skipExpressions && ok {
+					continue
+				}
 				overVal, err := v.Input(record, val)
 				if err != nil {
 					return nil, err

@@ -108,6 +108,37 @@ ok, err := m.Update(xdb.Record{
 ok, err := m.Delete(xdb.WhereEq("id", 1))
 ```
 
+### UPDATE 赋值表达式
+
+`Expr(sql, args...)` 让赋值在数据库中基于字段原值执行，支持零个或多个绑定参数，并可与普通赋值、`SelfAdd`、`SelfSub` 混用。例如，MySQL JSON 局部更新与版本检查可以放在同一条 UPDATE 中：
+
+```go
+ok, err := m.Update(xdb.Record{
+    "support_write_state": xdb.Expr(
+        `JSON_SET(
+            COALESCE(support_write_state, JSON_OBJECT()),
+            ?, JSON_OBJECT('revision', ?, 'pending_operation_id', ?)
+        )`,
+        statePath, expectedRevision+1, operationID,
+    ),
+    "updated_at": now,
+},
+    xdb.WhereEq("tenant_id", tenantID),
+    xdb.WhereEq("conversation_id", conversationID),
+    xdb.WhereRawArgs(
+        "COALESCE(JSON_EXTRACT(support_write_state, ?), 0) = ?",
+        revisionPath, expectedRevision,
+    ),
+)
+```
+
+- `Expr` 仅支持 UPDATE 的字段赋值及 UpdateBuilder，不支持 INSERT、UPSERT 或 WHERE 值，也不展开嵌套表达式。
+- SQL 模板由可信代码提供，动态数据通过 `?` 和 `args` 绑定。表达式中的函数和标识符保持原样，由调用方选择适合数据库的写法；赋值左侧字段名仍按方言引用并遵守严格标识符校验。
+- SET 与 WHERE 参数按最终 SQL 顺序绑定；执行时统一转换占位符，PostgreSQL 使用连续的 `$1`、`$2` 等编号。SQL 语法和参数数量错误在执行阶段返回。
+- 无参数表达式可写为 `xdb.Expr("CURRENT_TIMESTAMP")`。普通字符串仍按普通值绑定，不会作为 SQL 执行。
+- UPDATE 的表达式值跳过对应字段的 input hook（包括 `Json`），其参数直接作为数据库绑定值；同一记录的普通字段仍执行 hook。所有既有 validators 仍会调用，需要校验表达式字段的自定义 validator 必须处理尚未求值的 `xdb.Expression`。
+- `Update` 的 `ok` 仍表示受影响行数大于零。在上述递增版本的例子中，`err == nil && !ok` 表示记录不存在或版本不匹配。CAS 使用 `Update` 返回值；现有 `UpdateBy` 不保留这个布尔结果。
+
 ## 多数据库支持
 
 xdb 通过 `Dialect` 接口实现多数据库兼容，自动处理不同数据库的语法差异。
