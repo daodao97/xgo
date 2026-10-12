@@ -231,16 +231,8 @@ func NewGin(opts ...AppOption) *gin.Engine {
 	return r
 }
 
-func NewGinHttpServer(addr string, engine func() *gin.Engine) NewServer {
-	return func() Server {
-		return &HTTPServer{
-			server: &http.Server{
-				Addr:    addr,
-				Handler: engine(),
-			},
-			started: make(chan struct{}),
-		}
-	}
+func NewGinHttpServer(addr string, engine func() *gin.Engine, opts ...HTTPServerOption) NewServer {
+	return NewHttp(addr, func() http.Handler { return engine() }, opts...)
 }
 
 var SuccessCode = 0
